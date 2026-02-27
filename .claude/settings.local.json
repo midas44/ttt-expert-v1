@@ -1,6 +1,8 @@
 {
   "enabledMcpjsonServers": [
-    "gitlab"
+    "gitlab",
+    "confluence",
+    "ttt-swagger-test"
   ],
   "enableAllProjectMcpServers": true
 }
