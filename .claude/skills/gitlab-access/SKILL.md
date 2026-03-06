@@ -2,15 +2,17 @@
 name: gitlab-access
 description: >
   Access the GitLab instance at gitlab.noveogroup.com — read issues/tickets,
-  fetch comments, search issues by label/keyword, and download file attachments
-  (screenshots, images, documents) from the Time Tracking Tool (TTT / ttt-spring) project.
+  fetch comments, search issues by label/keyword, download file attachments
+  (screenshots, images, documents), list pipelines, compare branches, and view
+  code changes from the Time Tracking Tool (TTT / ttt-spring) project.
   Use this skill whenever the user mentions a GitLab ticket, issue URL, merge request,
-  or asks to fetch/download/summarize anything from gitlab.noveogroup.com. Also use it
-  when the user pastes a GitLab URL, references an issue number, asks to search for
-  tickets, or mentions TTT/Time Tracking Tool/Time Reporting Tool issues. This includes
-  tasks like "read ticket #3036", "get the screenshots from that issue",
-  "summarize the GitLab issue", "find all vacation bugs in Sprint 14",
-  or "download the attachments".
+  pipeline, branch, or asks to fetch/download/summarize anything from gitlab.noveogroup.com.
+  Also use it when the user pastes a GitLab URL, references an issue number, asks to search
+  for tickets, wants to list pipelines, see branch changes, compare commits, or mentions
+  TTT/Time Tracking Tool/Time Reporting Tool issues. This includes tasks like
+  "read ticket #3036", "get the screenshots from that issue", "summarize the GitLab issue",
+  "find all vacation bugs in Sprint 14", "download the attachments",
+  "list latest pipelines", "show changes in release/2.1", or "what files changed in the last pipeline".
 ---
 
 # GitLab Access — Time Tracking Tool (TTT)
@@ -172,6 +174,70 @@ If Puppeteer is unavailable, write an inline Node.js script. Critical details:
 
 ---
 
+## 3. Pipelines, Branches & Code Changes
+
+Use the REST API to list pipelines, compare branches, and see what files changed.
+
+### List Pipelines
+
+```bash
+curl -s --noproxy "gitlab.noveogroup.com" --header "PRIVATE-TOKEN: $TOKEN" \
+  "https://gitlab.noveogroup.com/api/v4/projects/1288/pipelines?per_page=10&order_by=id&sort=desc"
+```
+
+Key response fields: `id`, `iid`, `sha`, `ref` (branch/tag), `status`, `source`, `created_at`, `web_url`.
+
+**Important:** Do NOT use `scope=all` — this GitLab version rejects it. Omit `scope` entirely.
+
+Filter by branch:
+```bash
+...pipelines?ref=release/2.1&per_page=10&order_by=id&sort=desc
+```
+
+Filter by status: `status=success`, `status=failed`, `status=running`, etc.
+
+### Compare Commits (What Changed Between Pipelines)
+
+To see the code diff between two pipeline runs on the same branch, use the `compare` endpoint
+with the `sha` values from each pipeline:
+
+```bash
+curl -s --noproxy "gitlab.noveogroup.com" --header "PRIVATE-TOKEN: $TOKEN" \
+  "https://gitlab.noveogroup.com/api/v4/projects/1288/repository/compare?from=OLD_SHA&to=NEW_SHA"
+```
+
+The response contains:
+- `commits[]` — list of commits between the two SHAs (`short_id`, `title`, `author_name`, `created_at`)
+- `diffs[]` — list of changed files with fields:
+  - `new_path` — file path
+  - `new_file` (bool) — added file
+  - `deleted_file` (bool) — deleted file
+  - `renamed_file` (bool) — renamed file
+  - `diff` — unified diff text
+
+### List Branches
+
+```bash
+curl -s --noproxy "gitlab.noveogroup.com" --header "PRIVATE-TOKEN: $TOKEN" \
+  "https://gitlab.noveogroup.com/api/v4/projects/1288/repository/branches?per_page=20&order_by=updated&sort=desc"
+```
+
+### Get a Single Commit
+
+```bash
+curl -s --noproxy "gitlab.noveogroup.com" --header "PRIVATE-TOKEN: $TOKEN" \
+  "https://gitlab.noveogroup.com/api/v4/projects/1288/repository/commits/COMMIT_SHA"
+```
+
+### Workflow: "What changed in the latest pipeline on branch X?"
+
+1. Fetch the 2 most recent pipelines for the branch: `?ref=BRANCH&per_page=2&order_by=id&sort=desc`
+2. Extract the `sha` from each pipeline (newer = `to`, older = `from`)
+3. Call the compare endpoint with those SHAs
+4. Parse the `commits` and `diffs` arrays from the response
+
+---
+
 ## Troubleshooting
 
 | Symptom | Cause | Fix |
@@ -181,6 +247,7 @@ If Puppeteer is unavailable, write an inline Node.js script. Critical details:
 | Navigation timeout | `networkidle0` too strict | Switch to `domcontentloaded` |
 | 404 on API endpoint | Wrong project ID | Use `1288` for ttt-spring |
 | 302 redirect to sign_in | PAT used on web route | Use Puppeteer method instead |
+| `scope does not have a valid value` | Used `scope=all` on pipelines endpoint | Omit `scope` param — only valid for issues |
 | Password with `!` or special chars mangled | Shell expansion | Use `--credentials-file` instead of `--password` |
 
 ---
