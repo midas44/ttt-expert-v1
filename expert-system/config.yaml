@@ -1,0 +1,26 @@
+session:
+  delay_minutes: 30
+  max_duration_minutes: 240
+
+phase:
+  current: "knowledge_acquisition"
+  generation_allowed: false
+
+thresholds:
+  knowledge_coverage_target: 0.8
+  note_quality_min_links: 2
+
+repos:
+  local_clone_path: "expert-system/repos/"
+  default_branch: "release/2.1"
+  additional_branches: [stage]
+
+testing_dev_envs:
+  primary:
+    name: "timemachine"
+  secondary:
+    name: "qa-1"
+
+testing_prod_envs:
+  primary:
+    name: "stage"

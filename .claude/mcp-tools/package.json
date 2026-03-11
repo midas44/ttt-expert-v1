@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "@ivotoby/openapi-mcp-server": "^1.14.0"
+  }
+}
