@@ -3,7 +3,9 @@
 ## Global Goal
 
 Build comprehensive knowledge base of Time Tracking Tool project (aka TTT aka Time Reporting Tool) and generate
-test plans and test cases for all major features. Note that existing documentation can be incomplete / unclear and low-quality, therefore use codebase analysis (static) in combination with application exploration (dynamic) as final truth.
+test plans and test cases for all major features. Note that existing documentation can be incomplete / unclear and low-quality, therefore use codebase analysis (static) in combination with application exploration (dynamic) as final truth. 
+
+Note: (Mainly) use English version of application for exploratory analysis / testing; use English language in knowledge base; in cases of ambigous/unclear terminology give Russian version of terms as well.
 
 ## Project Context
 
@@ -40,11 +42,13 @@ API integrations:
 * other internal projects (e.g. Company Staff (aka CS) to get users and salary offices data);
 * external trackers (JIRA, GitLab etc.)
 
-Application uses cron jobs to trigger regular operations by time (e.g. syncronization with CS).
+Application uses cron jobs to trigger regular operations by time (e.g. synchronization with CS).
 
 There are email notifications of different types.
 
-Note: some features may not mentioned here.
+UI has 2 language versions: Russian (RU) and English (EN). Language switcher is available in page header.
+
+Note: This is brief information, some features/details may not be mentioned here due to size and complexity of project, feel free to investigate and include undescribed areas into knowledge base and generated test docs.
 
 ## Priority Areas
 
@@ -61,9 +65,13 @@ Note: some features may not mentioned here.
 - **Key branches**: stage (baseline/production version)
 
 ### Documentation
-- **Confluence space**: see skill confluence-access
+- **Confluence space**: space "NOV", project "Time Tracking Tool" (Noveo > Time Tracking Tool, see skill confluence-access)
 
   - Key pages:
+
+  Entry page for project with general info and links to documentation (can be severely outdated!):
+
+  https://projects.noveogroup.com/spaces/NOV/pages/18940713/Time+Tracking+Tool
 
   All pages in "Time Tracking Tool/Requirements/*"
 
@@ -83,14 +91,15 @@ Note: some features may not mentioned here.
 
   https://projects.noveogroup.com/spaces/NOV/pages/110298524/Trackers+integration+setup+and+testing
 
-  - Note: Some pages may be outdated
+  - Note: part of information in Confluence may be outdated/obsolete
 
 ### Designs
 - **Figma project**: see skill figma-access
+Use links to figma layers from GitLab tickets and Confluence pages
 
 ### Test Management
 - **Qase project**: see skill qase-access
-  - Note: Can be outdated, unclear, incomplete. Use along with other info sources with descretion
+  - Note: Can be outdated, unclear, incomplete. Use along with other info sources with discretion
 
 ### Tickets
 - **GitLab tickets**: https://gitlab.noveogroup.com/noveo-internal-tools/ttt-spring/-/boards (see skill gitlab-access)
@@ -98,15 +107,24 @@ Note: some features may not mentioned here.
   - Note: try to define tasks/tickets with latest implementations; but for some areas older tickets can be useful.
 
 ### Additional Documents
-- **Google Doc**: by links from Confluence pages and GitLab tickets
-- **Google Sheet]**: by links from Confluence pages and GitLab tickets
+- **Google Docs**: by links from Confluence pages and GitLab tickets (access by link, no mcp required)
+- **Google Sheets**: by links from Confluence pages and GitLab tickets (access by link, no mcp required)
 
 ### Testing Environments
-Use config/ttt/envs/* to get environment parameters, see skills: playwright-browser, swagger-api, postgres-db
+Use config/ttt/envs/* to get environment parameters, see skills: playwright-browser, postgres-db
 - **Primary dev**: timemachine
 - **Secondary dev**: qa-1
 - **Primary prod**: stage
 - Note: compare dev and prod versions to investigate changes in current Sprint
+- List of swaggers available for each test environment (see skill swagger-api):
+[envURL]/api/ttt/swagger-ui.html?urls.primaryName=api
+[envURL]/api/ttt/swagger-ui.html?urls.primaryName=test-api
+[envURL]/api/vacation//swagger-ui.html?urls.primaryName=default
+[envURL]/api/vacation//swagger-ui.html?urls.primaryName=test-api
+[envURL]/api/calendar/swagger-ui.html?urls.primaryName=default
+[envURL]/api/email/swagger-ui.html?urls.primaryName=api
+[envURL]/api/email/swagger-ui.html?urls.primaryName=test-api
+where envURL = https://ttt-[env].noveogroup.com (e.g. https://ttt-qa-1.noveogroup.com, https://ttt-timemachine.noveogroup.com, https://ttt-stage.noveogroup.com)
 
 ## Output Requirements
 - Test plans as XLSX (one per major module/feature area)
@@ -114,4 +132,5 @@ Use config/ttt/envs/* to get environment parameters, see skills: playwright-brow
 - Must include description how to generate input test data (by database mining with criteria, random generation in given range, timestamp addition, static values etc.)
 - Can include UI, API and DB actions
 - Compatible with Google Sheets import
-- Note: will be used as input for autotests generation by AI
+- English only
+- Note: Will be used as input for autotests generation by AI

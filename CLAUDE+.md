@@ -48,15 +48,15 @@ repos:
   default_branch: "develop"
   additional_branches: []
 
-testing_envs:
+testing_dev_envs:
   primary:
-    url: ""
-    api_base: ""
-    db_host: ""
+    name: "timemachine"
   secondary:
-    url: ""
-    api_base: ""
-    db_host: ""
+    name: "qa-1"
+
+testing_prod_envs:
+  primary:
+    name: "stage"
 ```
 
 **Rules:**
@@ -64,6 +64,7 @@ testing_envs:
 - If `phase.current` is `"knowledge_acquisition"` and `phase.generation_allowed` is `false`, do NOT generate test documentation — knowledge building only
 - Check `session.delay_minutes` — if previous session briefing timestamp is less than this many minutes ago, notify human and wait for confirmation
 - Use `repos.default_branch` unless instructed otherwise
+- Resolve environment connection parameters (DB host, API token, URLs) from `config/ttt/envs/<name>.yml`. Construct app URL from `config/ttt/ttt.yml` pattern: `https://ttt-<name>.noveogroup.com`
 
 ---
 
