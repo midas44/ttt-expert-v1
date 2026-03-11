@@ -46,7 +46,7 @@ thresholds:
 repos:
   local_clone_path: "expert-system/repos/"
   default_branch: "release/2.1"
-  additional_branches: "stage"
+  additional_branches: [stage]
 
 testing_dev_envs:
   primary:
@@ -467,6 +467,8 @@ When knowledge is insufficient for thorough test cases:
 | **Figma** | Design specifications |
 | **Qase** | Existing test suites/cases |
 
+> **Scope split:** MCP servers above are registered across two scopes. Project-scope servers (`.claude/.mcp.json`): gitlab, confluence, postgres, figma, and all 21 swagger servers. User-scope servers (`~/.claude.json`): obsidian, qmd-search, sqlite-analytics, qase, playwright. Both scopes load automatically.
+
 ### mcp-obsidian Usage Notes
 - Use `write_note` with `mode: "append"` to add to existing notes without overwriting
 - Use `update_frontmatter` with `merge: true` to update metadata without losing existing fields
@@ -509,7 +511,7 @@ When knowledge is insufficient for thorough test cases:
 6. Create `_INVESTIGATION_AGENDA.md` with Orientation objectives
 7. Create `_KNOWLEDGE_COVERAGE.md`: "Coverage: 0%"
 8. Create `_INDEX.md` with placeholder links
-9. Set up QMD: `qmd collection add /home/v/Dev/ttt-expert-v1/expert-system/vault/ --name expert-vault`
+9. Set up QMD (skip if collection already exists): `qmd collection add /home/v/Dev/ttt-expert-v1/expert-system/vault/ --name expert-vault`
 10. Run: `qmd context add qmd://expert-vault "Expert system knowledge base for legacy web app investigation"`
 11. Run: `qmd embed` (downloads embedding model on first run ~330MB — automatic, no config required)
 12. Clone repository into `expert-system/repos/`

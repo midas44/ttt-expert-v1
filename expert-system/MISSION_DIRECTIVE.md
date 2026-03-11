@@ -5,7 +5,7 @@
 Build comprehensive knowledge base of Time Tracking Tool project (aka TTT aka Time Reporting Tool) and generate
 test plans and test cases for all major features. Note that existing documentation can be incomplete / unclear and low-quality, therefore use codebase analysis (static) in combination with application exploration (dynamic) as final truth. 
 
-Note: (Mainly) use English version of application for exploratory analysis / testing; use English language in knowledge base; in cases of ambigous/unclear terminology give Russian version of terms as well.
+Note: (Mainly) use English version of application for exploratory analysis / testing; use English language in knowledge base; in cases of ambiguous/unclear terminology give Russian version of terms as well.
 
 ## Project Context
 
