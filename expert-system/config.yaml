@@ -1,5 +1,5 @@
 session:
-  delay_minutes: 30
+  delay_minutes: 420
   max_duration_minutes: 240
 
 phase:
@@ -30,8 +30,6 @@ current_sprint: 15
 autonomy:
   mode: "full"                       # "hybrid" (human-attended) or "full" (unattended)
   max_sessions: 30                   # Stop after N sessions (0 = unlimited)
-  max_budget_per_session_usd: 5.0    # Cost cap per session (--max-budget-usd)
-  max_total_budget_usd: 120.0        # Cumulative cost cap
   consecutive_failure_limit: 3       # Abort after N consecutive failures
   auto_phase_transition: false       # Auto-switch to Phase B when coverage target met
   log_dir: "expert-system/logs"      # Session log directory

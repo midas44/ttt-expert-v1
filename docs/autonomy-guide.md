@@ -3,6 +3,8 @@
 > **Purpose:** Step-by-step guide for preparing, launching, monitoring, and managing the expert system in fully autonomous mode — where sessions run unattended via a shell loop.
 >
 > **Prerequisite:** The base expert system must already be set up per `docs/human-guide.md`. This guide covers only the autonomy-specific additions.
+>
+> **Billing:** This system is designed for the Claude MAX plan subscription. The inter-session delay is tuned to consume ~60% of the daily 5h token budget, leaving headroom for interactive use.
 
 ---
 
@@ -16,7 +18,7 @@ In autonomous mode, a shell script (`expert-system/scripts/run-sessions.sh`) lau
 4. Updates vault notes, SQLite, and coverage tracking
 5. Exits
 
-The script captures exit codes, tracks costs, enforces stop conditions, and maintains a state file (`runner-state.json`) across sessions. Cross-session memory lives entirely in the vault and SQLite — each `claude -p` invocation is stateless.
+The script captures exit codes, enforces stop conditions, and maintains a state file (`runner-state.json`) across sessions. Cross-session memory lives entirely in the vault and SQLite — each `claude -p` invocation is stateless.
 
 ```
 ┌─────────────────────────────────────────────────────┐
@@ -52,14 +54,12 @@ claude mcp list | head -5
 
 ### 2.2 Review config.yaml
 
-The `autonomy` section was added to `expert-system/config.yaml`:
+The `autonomy` section in `expert-system/config.yaml`:
 
 ```yaml
 autonomy:
   mode: "full"                       # "hybrid" or "full"
   max_sessions: 30                   # Stop after N sessions (0 = unlimited)
-  max_budget_per_session_usd: 5.0    # Cost cap per session
-  max_total_budget_usd: 120.0        # Cumulative cost cap
   consecutive_failure_limit: 3       # Abort after N consecutive failures
   auto_phase_transition: false       # Auto-switch to Phase B when coverage target met
   log_dir: "expert-system/logs"      # Session log directory
@@ -74,21 +74,89 @@ autonomy:
 | Setting | Default | Consider changing if... |
 |---------|---------|------------------------|
 | `max_sessions` | 30 | You want fewer/more sessions total |
-| `max_budget_per_session_usd` | 5.0 | Sessions are hitting budget cap mid-work |
-| `max_total_budget_usd` | 120.0 | You want a tighter/looser overall cap |
 | `allow_api_mutations` | false | You trust autonomous POST/PATCH/DELETE on test envs |
 | `auto_phase_transition` | false | You want Phase B to start automatically when coverage is met |
 | `model` | opus | You want to use a different model |
-| `session.delay_minutes` | 30 | You want more/less gap between sessions |
+| `session.delay_minutes` | 420 | See §2.3 for tuning guidance |
 
-### 2.3 Review MISSION_DIRECTIVE.md
+### 2.3 Session Delay and Token Budget
+
+The MAX plan has a 5h daily token budget. Empirically, **140 min of wall-clock Claude runtime consumes 100% of the 5h budget** (burn rate ~2.14x). The inter-session delay controls how much of the daily budget the runner consumes.
+
+The default `delay_minutes: 420` (7 hours) targets ~60% daily consumption, assuming 25-30 min average session duration.
+
+#### Delay Reference Table (T = 25 min avg session)
+
+| Delay | Sessions/day | Active time/day | Tokens consumed/day | % of 5h budget | Days to finish 30 sessions |
+|---|---|---|---|---|---|
+| 240 min (4h) | 5.4 | 2h16m | 4h52m | **97%** | 5.5 |
+| 300 min (5h) | 4.4 | 1h51m | 3h57m | 79% | 6.8 |
+| 360 min (6h) | 3.7 | 1h34m | 3h20m | 67% | 8.0 |
+| **420 min (7h)** | **3.2** | **1h21m** | **2h53m** | **58%** | **9.3** |
+| 480 min (8h) | 2.9 | 1h11m | 2h33m | 51% | 10.5 |
+| 540 min (9h) | 2.5 | 1h04m | 2h16m | 45% | 11.8 |
+
+#### Impact of Session Duration (delay = 420 min)
+
+| Avg session | Sessions/day | Active time/day | Tokens/day | % of 5h | Days for 30 |
+|---|---|---|---|---|---|
+| 15 min | 3.3 | 50m | 1h47m | 36% | 9.1 |
+| 20 min | 3.3 | 65m | 2h19m | 47% | 9.2 |
+| **25 min** | **3.2** | **81m** | **2h53m** | **58%** | **9.3** |
+| 30 min | 3.2 | 96m | 3h26m | 69% | 9.4 |
+| 45 min | 3.1 | 139m | 4h58m | 99% | 9.7 |
+
+#### Projected 30-Session Timeline (T = 25 min, delay = 420 min)
+
+Each session consumes ~54 min of token budget (25 min × 2.14 burn rate).
+
+| Day | Sessions | Session ## | Active time | Tokens consumed | Cumulative tokens |
+|---|---|---|---|---|---|
+| 1 | 3 | #1 – #3 | 1h15m | 2h41m (54%) | 2h41m |
+| 2 | 3 | #4 – #6 | 1h15m | 2h41m (54%) | 5h22m |
+| 3 | 3 | #7 – #9 | 1h15m | 2h41m (54%) | 8h03m |
+| 4 | 3 | #10 – #12 | 1h15m | 2h41m (54%) | 10h44m |
+| 5 | 3 | #13 – #15 | 1h15m | 2h41m (54%) | 13h25m |
+| 6 | 3 | #16 – #18 | 1h15m | 2h41m (54%) | 16h06m |
+| 7 | 3 | #19 – #21 | 1h15m | 2h41m (54%) | 18h47m |
+| 8 | 3 | #22 – #24 | 1h15m | 2h41m (54%) | 21h28m |
+| 9 | 3 | #25 – #27 | 1h15m | 2h41m (54%) | 24h09m |
+| 10 | 3 | #28 – #30 | 1h15m | 2h41m (54%) | 26h50m |
+
+**Total:** 30 sessions over ~10 days, ~26h50m token budget consumed (out of 50h available across 10 days).
+
+**Tuning formula:** `delay = T * (1440 / target_active - 1)` where `T` = avg session duration and `target_active` = desired daily active minutes (84 min for 60%).
+
+**Calibration after first sessions:**
+
+```bash
+python3 -c "
+import json
+with open('expert-system/logs/runner-state.json') as f:
+    s = json.load(f)
+durations = [sess['duration_sec']/60 for sess in s['sessions']]
+avg = sum(durations) / len(durations)
+print(f'Session durations (min): {[round(d,1) for d in durations]}')
+print(f'Average: {avg:.0f} min')
+# 140 min wall-clock = 100% of 5h budget (burn rate 2.14x)
+for pct in [0.5, 0.6, 0.7]:
+    target_active = 140 * pct  # wall-clock min to consume pct of budget
+    delay = avg * (1440 / target_active - 1)
+    sessions_per_day = 1440 / (avg + delay)
+    print(f'{pct:.0%} target: delay={delay:.0f} min ({delay/60:.1f}h), ~{sessions_per_day:.1f} sessions/day')
+"
+```
+
+Adjust `session.delay_minutes` in config.yaml — the runner re-reads it before each session.
+
+### 2.5 Review MISSION_DIRECTIVE.md
 
 The mission directive drives what the system investigates. Before unattended runs, ensure:
 - Priority areas are correctly ordered
 - Information source URLs are current
 - Testing environment names match config.yaml
 
-### 2.4 Ensure QMD Daemon Persistence
+### 2.6 Ensure QMD Daemon Persistence
 
 QMD must stay running across sessions. Add to `~/.bashrc` if not already there:
 
@@ -104,7 +172,7 @@ Or run it in a tmux/screen session:
 tmux new -d -s qmd 'qmd mcp --http'
 ```
 
-### 2.5 Make the Script Executable
+### 2.7 Make the Script Executable
 
 ```bash
 chmod +x expert-system/scripts/run-sessions.sh
@@ -184,8 +252,6 @@ Watch the current session's log as it runs:
 ls -t expert-system/logs/session-*.json | head -1
 
 # Tail it
-tail -f expert-system/logs/session-*.json | head -1
-# or
 tail -f "$(ls -t expert-system/logs/session-*.json | head -1)"
 ```
 
@@ -197,7 +263,7 @@ Check overall progress:
 cat expert-system/logs/runner-state.json | python3 -m json.tool
 ```
 
-Shows: current session number, total cost, consecutive failures, and per-session history.
+Shows: current session number, consecutive failures, and per-session history (timestamp, exit code, duration).
 
 Quick summary:
 
@@ -207,7 +273,6 @@ import json
 with open('expert-system/logs/runner-state.json') as f:
     s = json.load(f)
 print(f'Sessions completed: {s[\"session_number\"]}')
-print(f'Total cost: \${s[\"total_cost_usd\"]:.2f}')
 print(f'Consecutive failures: {s[\"consecutive_failures\"]}')
 if s['sessions']:
     last = s['sessions'][-1]
@@ -307,7 +372,6 @@ rm expert-system/.stop
 You can edit `config.yaml` between sessions (the runner re-reads it before each session):
 
 - **Change delay**: edit `session.delay_minutes`
-- **Change budget cap**: edit `autonomy.max_budget_per_session_usd`
 - **Switch to hybrid**: set `autonomy.mode: "hybrid"` — runner will abort at preflight
 - **Enable Phase B**: set `phase.current: "generation"` and `phase.generation_allowed: true`
 - **Allow mutations**: set `autonomy.allow_api_mutations: true`
@@ -338,7 +402,6 @@ The runner stops automatically when any of these conditions is met:
 |-----------|---------|---------------|
 | Stop file exists | `expert-system/.stop` | `touch` / `rm` the file |
 | Max sessions reached | 30 | `autonomy.max_sessions` in config.yaml or `--sessions N` flag |
-| Total budget exceeded | $120 | `autonomy.max_total_budget_usd` in config.yaml |
 | N consecutive failures | 3 | `autonomy.consecutive_failure_limit` in config.yaml |
 
 Set `max_sessions: 0` for unlimited sessions (will run until another condition triggers).
@@ -407,7 +470,6 @@ cat "$(ls -t expert-system/logs/session-*.json | head -1)" | python3 -m json.too
 Common causes:
 - **QMD daemon not running**: `qmd mcp --http --daemon`
 - **MCP server crashed**: `claude mcp list` to check, restart as needed
-- **Budget too low**: increase `max_budget_per_session_usd` if sessions hit the cap mid-work
 
 ### Consecutive failure limit hit
 
@@ -418,7 +480,7 @@ import json
 with open('expert-system/logs/runner-state.json') as f:
     s = json.load(f)
 for sess in s['sessions'][-5:]:
-    print(f'Session {sess[\"session\"]}: exit={sess[\"exit_code\"]} cost=\${sess[\"cost_usd\"]} duration={sess[\"duration_sec\"]}s')
+    print(f'Session {sess[\"session\"]}: exit={sess[\"exit_code\"]} duration={sess[\"duration_sec\"]}s')
 "
 ```
 
@@ -431,10 +493,6 @@ Fix the underlying issue, then either:
 - Check that mcp-obsidian is registered: `claude mcp get obsidian`
 - Check vault permissions: `ls -la expert-system/vault/`
 - Read the session log for errors
-
-### Cost tracking shows $0
-
-The cost parsing depends on Claude's `--output-format json` output structure. If costs aren't being captured, sessions still run correctly — the budget cap uses `--max-budget-usd` which Claude enforces internally.
 
 ---
 
@@ -489,7 +547,7 @@ cat expert-system/vault/_KNOWLEDGE_COVERAGE.md
 |------|---------|
 | `expert-system/config.yaml` | All configuration including autonomy settings |
 | `expert-system/scripts/run-sessions.sh` | The runner script |
-| `expert-system/logs/runner-state.json` | Session counter, costs, failure tracking |
+| `expert-system/logs/runner-state.json` | Session counter, failure tracking |
 | `expert-system/logs/session-NNN-*.json` | Per-session Claude output logs |
 | `expert-system/.stop` | Touch to gracefully stop the runner |
 | `expert-system/vault/_SESSION_BRIEFING.md` | What happened last, what's next |

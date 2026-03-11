@@ -85,8 +85,6 @@ preflight() {
 # ── Config parsing ────────────────────────────────────────────────────────────
 parse_config() {
     MAX_SESSIONS=$(read_yaml "autonomy.max_sessions")
-    MAX_BUDGET_PER_SESSION=$(read_yaml "autonomy.max_budget_per_session_usd")
-    MAX_TOTAL_BUDGET=$(read_yaml "autonomy.max_total_budget_usd")
     CONSECUTIVE_FAILURE_LIMIT=$(read_yaml "autonomy.consecutive_failure_limit")
     LOG_DIR="$PROJECT_ROOT/$(read_yaml 'autonomy.log_dir')"
     STOP_FILE="$PROJECT_ROOT/$(read_yaml 'autonomy.stop_file')"
@@ -115,7 +113,6 @@ init_state() {
 import json
 state = {
     'session_number': 0,
-    'total_cost_usd': 0.0,
     'consecutive_failures': 0,
     'sessions': []
 }
@@ -135,14 +132,13 @@ print(state['$1'])
 }
 
 update_state() {
-    # update_state <session_num> <exit_code> <cost_usd> <duration_sec> <log_file>
+    # update_state <session_num> <exit_code> <duration_sec> <log_file>
     python3 -c "
 import json, datetime
 with open('$STATE_FILE') as f:
     state = json.load(f)
 
 state['session_number'] = $1
-state['total_cost_usd'] = round(state['total_cost_usd'] + $3, 4)
 
 if $2 != 0:
     state['consecutive_failures'] += 1
@@ -153,9 +149,8 @@ state['sessions'].append({
     'session': $1,
     'timestamp': datetime.datetime.now().isoformat(),
     'exit_code': $2,
-    'cost_usd': $3,
-    'duration_sec': $4,
-    'log_file': '$5'
+    'duration_sec': $3,
+    'log_file': '$4'
 })
 
 with open('$STATE_FILE', 'w') as f:
@@ -238,15 +233,7 @@ check_stop_conditions() {
         return 1
     fi
 
-    # 3. Total budget
-    local total_cost
-    total_cost=$(get_state_field "total_cost_usd")
-    if python3 -c "exit(0 if $total_cost >= $MAX_TOTAL_BUDGET else 1)" 2>/dev/null; then
-        log "Total budget exceeded: \$${total_cost} >= \$${MAX_TOTAL_BUDGET}"
-        return 1
-    fi
-
-    # 4. Consecutive failures
+    # 3. Consecutive failures
     local failures
     failures=$(get_state_field "consecutive_failures")
     if [[ "$failures" -ge "$CONSECUTIVE_FAILURE_LIMIT" ]]; then
@@ -255,40 +242,6 @@ check_stop_conditions() {
     fi
 
     return 0
-}
-
-# ── Parse cost from Claude JSON output ────────────────────────────────────────
-parse_cost() {
-    local log_file="$1"
-    # Claude --output-format json puts cost info in the output
-    # Try to extract cost_usd from the JSON; default to 0 if not found
-    python3 -c "
-import json, sys
-cost = 0.0
-try:
-    with open('$log_file') as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                obj = json.loads(line)
-                # Look for cost information in various possible locations
-                if isinstance(obj, dict):
-                    if 'cost_usd' in obj:
-                        cost = float(obj['cost_usd'])
-                    elif 'result' in obj and isinstance(obj['result'], dict):
-                        if 'cost_usd' in obj['result']:
-                            cost = float(obj['result']['cost_usd'])
-                    elif 'usage' in obj and isinstance(obj['usage'], dict):
-                        # Estimate from token usage if direct cost not available
-                        pass
-            except (json.JSONDecodeError, ValueError):
-                continue
-except FileNotFoundError:
-    pass
-print(cost)
-" 2>/dev/null || echo "0.0"
 }
 
 # ── Main loop ─────────────────────────────────────────────────────────────────
@@ -300,8 +253,8 @@ main() {
     local session_num
     session_num=$(( $(get_state_field "session_number") + 1 ))
 
-    log "Starting from session $session_num (max: $MAX_SESSIONS, budget: \$${MAX_TOTAL_BUDGET})"
-    log "Model: $MODEL, effort: $EFFORT, per-session budget: \$${MAX_BUDGET_PER_SESSION}"
+    log "Starting from session $session_num (max: $MAX_SESSIONS)"
+    log "Model: $MODEL, effort: $EFFORT"
     log "Phase: $PHASE"
     log "Log dir: $LOG_DIR"
     log "Stop file: $STOP_FILE"
@@ -324,7 +277,7 @@ main() {
             echo "$prompt"
             echo "---"
             log "[DRY RUN] Log file: $log_file"
-            log "[DRY RUN] Command: claude -p --output-format json --model $MODEL --effort $EFFORT --max-budget-usd $MAX_BUDGET_PER_SESSION --permission-mode bypassPermissions"
+            log "[DRY RUN] Command: claude -p --output-format json --model $MODEL --effort $EFFORT --permission-mode bypassPermissions"
             session_num=$((session_num + 1))
             continue
         fi
@@ -337,7 +290,6 @@ main() {
             --output-format json \
             --model "$MODEL" \
             --effort "$EFFORT" \
-            --max-budget-usd "$MAX_BUDGET_PER_SESSION" \
             --permission-mode bypassPermissions \
             "$prompt" \
             > "$log_file" 2>&1 || exit_code=$?
@@ -346,13 +298,10 @@ main() {
         end_time=$(date +%s)
         local duration=$(( end_time - start_time ))
 
-        local cost
-        cost=$(parse_cost "$log_file")
-
-        update_state "$session_num" "$exit_code" "$cost" "$duration" "$log_file"
+        update_state "$session_num" "$exit_code" "$duration" "$log_file"
 
         if [[ "$exit_code" -eq 0 ]]; then
-            log "Session $session_num completed (${duration}s, \$${cost})"
+            log "Session $session_num completed (${duration}s)"
         else
             log "Session $session_num FAILED with exit code $exit_code (${duration}s)"
         fi
@@ -368,7 +317,6 @@ main() {
 
     log "━━━ Runner finished ━━━"
     log "Total sessions: $(get_state_field 'session_number')"
-    log "Total cost: \$$(get_state_field 'total_cost_usd')"
     log "State: $STATE_FILE"
 }
 
