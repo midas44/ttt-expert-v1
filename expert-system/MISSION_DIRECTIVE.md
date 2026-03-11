@@ -13,7 +13,7 @@ TTT is web application aimed for internal corporate tracking / processing / mana
 * reports of hours spent for particular tasks;
 * absences of different types: vacations, days-off, sick-leaves.
 
-# Functionality
+### Functionality
 
 Different types of time-related data views:
 * tables of different entities: reports, vacation requests, project members etc.;
@@ -91,7 +91,7 @@ Note: This is brief information, some features/details may not be mentioned here
 
   https://projects.noveogroup.com/spaces/NOV/pages/110298524/Trackers+integration+setup+and+testing
 
-  - Note: part of information in Confluence may be outdated/obsolete
+  - Note: part of the information in Confluence may be outdated/obsolete
 
 ### Designs
 - **Figma project**: see skill figma-access
@@ -103,7 +103,7 @@ Use links to figma layers from GitLab tickets and Confluence pages
 
 ### Tickets
 - **GitLab tickets**: https://gitlab.noveogroup.com/noveo-internal-tools/ttt-spring/-/boards (see skill gitlab-access)
-  - Key labels: Sprint X, HotFix Sprint X, where X>=11 and X<=15
+  - Key labels: Sprint X, HotFix Sprint X, where X>=11 and X<=[current_sprint], ([current_sprint] number from config.yaml)
   - Note: try to define tasks/tickets with latest implementations; but for some areas older tickets can be useful.
 
 ### Additional Documents
@@ -119,8 +119,8 @@ Use config/ttt/envs/* to get environment parameters, see skills: playwright-brow
 - List of swaggers available for each test environment (see skill swagger-api):
 [envURL]/api/ttt/swagger-ui.html?urls.primaryName=api
 [envURL]/api/ttt/swagger-ui.html?urls.primaryName=test-api
-[envURL]/api/vacation//swagger-ui.html?urls.primaryName=default
-[envURL]/api/vacation//swagger-ui.html?urls.primaryName=test-api
+[envURL]/api/vacation/swagger-ui.html?urls.primaryName=default
+[envURL]/api/vacation/swagger-ui.html?urls.primaryName=test-api
 [envURL]/api/calendar/swagger-ui.html?urls.primaryName=default
 [envURL]/api/email/swagger-ui.html?urls.primaryName=api
 [envURL]/api/email/swagger-ui.html?urls.primaryName=test-api

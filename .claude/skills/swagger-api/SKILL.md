@@ -1,46 +1,64 @@
 ---
 name: swagger-api
 description: >
-  Call TTT (Time Tracking Tool) REST API endpoints on the QA environment via Swagger MCP tools
+  Call TTT (Time Tracking Tool) REST API endpoints on testing environments via Swagger MCP tools
   or curl. Use this skill when the user asks to call a TTT API endpoint, test an API, use
   Swagger, interact with the TTT backend, manipulate the test clock, sync employees/projects,
   trigger notifications, or execute any endpoint from the TTT Swagger spec. Also use when
   the user mentions "call endpoint", "test API", "swagger", "clock", "sync employees",
   "sync projects", "send notifications", "reset clock", "patch clock", or references
-  ttt-qa-1/ttt-qa-2 environments. This skill covers both the test-api and api Swagger groups.
+  ttt-qa-1/ttt-qa-2/ttt-timemachine/ttt-stage environments. This skill covers all services
+  and Swagger groups across all environments.
 ---
 
 # TTT Swagger API
 
-## Environments
+## MCP Server Naming Convention
 
-| Env | Base URL | API Key |
-|-----|----------|---------|
-| QA-1 | `https://ttt-qa-1.noveogroup.com/api/ttt` | `af38fc55-97a4-4ea3-86c7-c5c80686f6be` |
+All Swagger MCP servers follow the pattern: `swagger-{env}-{service}-{group}`
 
-API keys are passed via the `API_SECRET_TOKEN` header.
+| Segment | Values |
+|---------|--------|
+| **env** | `qa1`, `tm` (timemachine), `stage` |
+| **service** | `ttt`, `vacation`, `calendar`, `email` |
+| **group** | `api`, `test` (test-api), `default` |
 
-## Swagger Spec URLs
+**Examples:** `swagger-qa1-ttt-test`, `swagger-tm-vacation-default`, `swagger-stage-email-api`
 
-Two API groups are available:
+MCP tool prefix: `mcp__swagger-{env}-{service}-{group}__`
 
-| Group | Spec URL | Description |
-|-------|----------|-------------|
-| **test-api** | `/v2/api-docs?group=test-api` | Test/dev endpoints (clock, sync, notifications) |
-| **api** | `/v2/api-docs?group=api` | Main production API endpoints |
+## Environments & API Keys
 
-The `test-api` group is connected via MCP server `ttt-swagger-test`.
+API keys are passed via the `API_SECRET_TOKEN` header. Keys are stored in `config/ttt/envs/<name>.yml`.
+
+| Env | URL pattern | API Key |
+|-----|-------------|---------|
+| qa-1 | `https://ttt-qa-1.noveogroup.com/api/{service}` | `76c45e8c-457a-4a8f-817f-4160d0cc2eaf` |
+| timemachine | `https://ttt-timemachine.noveogroup.com/api/{service}` | `c603661a-9057-42b9-b216-88e95784b9a0` |
+| stage | `https://ttt-stage.noveogroup.com/api/{service}` | `aec4212b-f480-4491-9f71-a38db8619e3a` |
+
+## Available Swagger Groups (per env)
+
+| Service | Group | MCP suffix | Description |
+|---------|-------|------------|-------------|
+| ttt | api | `-ttt-api` | Main production API endpoints |
+| ttt | test-api | `-ttt-test` | Test/dev endpoints (clock, sync, notifications) |
+| vacation | default | `-vacation-default` | Vacation service endpoints |
+| vacation | test-api | `-vacation-test` | Vacation test endpoints |
+| calendar | default | `-calendar-default` | Calendar service endpoints |
+| email | api | `-email-api` | Email service endpoints |
+| email | test-api | `-email-test` | Email test endpoints |
 
 ## Calling Endpoints
 
 ### Method 1: MCP Tools (preferred for GET and no-body POST)
 
-MCP tools are available with prefix `mcp__ttt-swagger-test__`. Use them directly:
+MCP tools are available with prefix `mcp__swagger-{env}-{service}-{group}__`. Example for qa-1 ttt test-api:
 
 ```
-mcp__ttt-swagger-test__get-using-get-5          → GET /v1/test/clock
-mcp__ttt-swagger-test__reset-using-pst          → POST /v1/test/clock/reset
-mcp__ttt-swagger-test__get-current-roles-using-get → GET /v1/test/employees/current/roles
+mcp__swagger-qa1-ttt-test__get-using-get-5              → GET /v1/test/clock
+mcp__swagger-qa1-ttt-test__reset-using-pst              → POST /v1/test/clock/reset
+mcp__swagger-qa1-ttt-test__get-current-roles-using-get   → GET /v1/test/employees/current/roles
 ```
 
 Works reliably for:
@@ -52,17 +70,17 @@ Works reliably for:
 The MCP server has a known issue serializing JSON request bodies (the `request` parameter schema defaults to string due to circular `$ref` in the Swagger spec). Use curl as fallback:
 
 ```bash
-curl -s --noproxy "ttt-qa-1.noveogroup.com" \
+curl -s --noproxy "*.noveogroup.com" \
   -X <METHOD> \
   -H "Content-Type: application/json" \
-  -H "API_SECRET_TOKEN: af38fc55-97a4-4ea3-86c7-c5c80686f6be" \
+  -H "API_SECRET_TOKEN: <api-key-from-env-config>" \
   -d '<json-body>' \
-  "https://ttt-qa-1.noveogroup.com/api/ttt<path>"
+  "https://ttt-<env>.noveogroup.com/api/<service><path>"
 ```
 
-**Important:** Always use `--noproxy "ttt-qa-1.noveogroup.com"` because the machine has a proxy configured but the QA server is on VPN (no proxy needed).
+**Important:** Always use `--noproxy "*.noveogroup.com"` because the machine has a proxy configured but the servers are on VPN (no proxy needed).
 
-## Endpoint Reference: test-api
+## Endpoint Reference: ttt test-api
 
 ### Clock
 
@@ -72,12 +90,12 @@ curl -s --noproxy "ttt-qa-1.noveogroup.com" \
 | `ptch-using-ptch-11` | PATCH | `/v1/test/clock` | `{"time":"<ISO>"}` | Set clock to specific time (**use curl**) |
 | `reset-using-pst` | POST | `/v1/test/clock/reset` | — | Reset clock to real time |
 
-**Clock PATCH example (curl):**
+**Clock PATCH example (curl, qa-1):**
 
 ```bash
-curl -s --noproxy "ttt-qa-1.noveogroup.com" -X PATCH \
+curl -s --noproxy "*.noveogroup.com" -X PATCH \
   -H "Content-Type: application/json" \
-  -H "API_SECRET_TOKEN: af38fc55-97a4-4ea3-86c7-c5c80686f6be" \
+  -H "API_SECRET_TOKEN: 76c45e8c-457a-4a8f-817f-4160d0cc2eaf" \
   -d '{"time":"2026-02-28T12:00:00"}' \
   "https://ttt-qa-1.noveogroup.com/api/ttt/v1/test/clock"
 ```
@@ -118,34 +136,32 @@ The `time` field uses ISO 8601 format without timezone: `YYYY-MM-DDTHH:mm:ss`.
 
 ## Discovering New Endpoints
 
-To check if the Swagger spec has changed or to explore the `api` group:
-
 ```bash
-# List available API groups
-curl -s --noproxy "ttt-qa-1.noveogroup.com" \
+# List available API groups for a service on an env
+curl -s --noproxy "*.noveogroup.com" \
   "https://ttt-qa-1.noveogroup.com/api/ttt/swagger-resources"
 
 # Fetch full spec for a group
-curl -s --noproxy "ttt-qa-1.noveogroup.com" \
-  -H "API_SECRET_TOKEN: af38fc55-97a4-4ea3-86c7-c5c80686f6be" \
+curl -s --noproxy "*.noveogroup.com" \
+  -H "API_SECRET_TOKEN: 76c45e8c-457a-4a8f-817f-4160d0cc2eaf" \
   "https://ttt-qa-1.noveogroup.com/api/ttt/v2/api-docs?group=api" | python3 -m json.tool
 ```
 
 ## Common Patterns
 
-### Shift clock forward by N days
+### Shift clock forward by N days (qa-1)
 
-1. Get current time: call `get-using-get-5`
+1. Get current time: call `mcp__swagger-qa1-ttt-test__get-using-get-5`
 2. Calculate new time: add N days to the returned timestamp
 3. Patch clock via curl with the new timestamp
-4. Verify: call `get-using-get-5` again
+4. Verify: call `mcp__swagger-qa1-ttt-test__get-using-get-5` again
 
 ### Reset after testing
 
 Always reset the clock after time-dependent tests:
 
 ```
-call mcp__ttt-swagger-test__reset-using-pst
+call mcp__swagger-qa1-ttt-test__reset-using-pst
 ```
 
 ### Check authentication
@@ -153,7 +169,14 @@ call mcp__ttt-swagger-test__reset-using-pst
 If endpoints return 401/403, verify the API key is correct by calling a simple GET:
 
 ```
-call mcp__ttt-swagger-test__get-using-get-5
+call mcp__swagger-qa1-ttt-test__get-using-get-5
 ```
 
 If this works, auth is fine — the issue is likely with how the request body is sent.
+
+### Switching environments
+
+To use a different environment, change the env prefix in the MCP tool name:
+- qa-1: `mcp__swagger-qa1-ttt-test__...`
+- timemachine: `mcp__swagger-tm-ttt-test__...`
+- stage: `mcp__swagger-stage-ttt-test__...`

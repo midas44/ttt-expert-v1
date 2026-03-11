@@ -45,8 +45,8 @@ thresholds:
 
 repos:
   local_clone_path: "expert-system/repos/"
-  default_branch: "develop"
-  additional_branches: []
+  default_branch: "release/2.1"
+  additional_branches: "stage"
 
 testing_dev_envs:
   primary:
@@ -180,7 +180,7 @@ created: YYYY-MM-DD
 updated: YYYY-MM-DD
 status: draft | active | reviewed | stale
 related: ["[[other-note]]"]
-branch: develop
+branch: <default_branch>
 ---
 ```
 
@@ -211,7 +211,7 @@ CREATE TABLE IF NOT EXISTS analysis_runs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     tool TEXT NOT NULL,
     target TEXT NOT NULL,
-    branch TEXT NOT NULL DEFAULT 'develop',
+    branch TEXT NOT NULL DEFAULT 'release/2.1',
     run_date TEXT NOT NULL,
     session_id TEXT,
     summary_json TEXT,
@@ -234,7 +234,7 @@ CREATE TABLE IF NOT EXISTS module_health (
     tech_debt_score REAL,
     last_analyzed TEXT,
     vault_note TEXT,
-    branch TEXT DEFAULT 'develop'
+    branch TEXT DEFAULT 'release/2.1'
 );
 
 CREATE TABLE IF NOT EXISTS design_issues (
@@ -457,10 +457,10 @@ When knowledge is insufficient for thorough test cases:
 | MCP | Use For |
 |-----|---------|
 | **mcp-obsidian** (`@mauricio.wolff/mcp-obsidian`) | Vault read/write/search, frontmatter, tags. Tools: `read_note`, `write_note`, `search_notes`, `list_directory`, `get_frontmatter`, `update_frontmatter`, `manage_tags`, `move_note`, `read_multiple_notes`, `get_notes_info`, `delete_note` |
-| **QMD** (port 8181) | Semantic/keyword search: `qmd_search`, `qmd_vsearch`, `qmd_query`, `qmd_get` |
-| **SQLite MCP** | Structured data queries and storage |
+| **qmd-search** (`qmd mcp`) | Semantic/keyword search over vault. Tools: `search`, `vector_search`, `deep_search`, `get`, `multi_get` |
+| **sqlite-analytics** (`@bytebase/dbhub`) | Structured data queries and storage. Tools: `execute_sql`, `search_objects` |
 | **Playwright** | UI exploration — read-only intent by default |
-| **Swagger/API** | API exploration — GET freely, ask for mutations |
+| **Swagger/API** (21 servers) | API exploration — GET freely, ask for mutations. Naming: `swagger-{env}-{service}-{group}` where env=`qa1`/`tm`/`stage`, service=`ttt`/`vacation`/`calendar`/`email`, group=`api`/`test`/`default`. See MISSION_DIRECTIVE §Testing Environments for full URL list. |
 | **PostgreSQL** | Data investigation — SELECT only |
 | **GitLab** | Tickets, MRs, CI/CD data (code via local clone) |
 | **Confluence** | Requirements, documentation |
@@ -511,7 +511,7 @@ When knowledge is insufficient for thorough test cases:
 8. Create `_INDEX.md` with placeholder links
 9. Set up QMD: `qmd collection add /home/v/Dev/ttt-expert-v1/expert-system/vault/ --name expert-vault`
 10. Run: `qmd context add qmd://expert-vault "Expert system knowledge base for legacy web app investigation"`
-11. Run: `qmd embed`
+11. Run: `qmd embed` (downloads embedding model on first run ~330MB — automatic, no config required)
 12. Clone repository into `expert-system/repos/`
 13. Verify all MCPs accessible
 14. Present Orientation plan to human

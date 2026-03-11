@@ -14,7 +14,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CACHE_DIR="$SCRIPT_DIR/cache"
-CACHE_FILE="$CACHE_DIR/swagger-spec-test-api.json"
+CACHE_FILE="$CACHE_DIR/swagger-spec-${SERVER_NAME:-default}.json"
 SPEC_URL="${OPENAPI_SPEC_PATH:-}"
 MAX_RETRIES=5
 RETRY_DELAY=3
