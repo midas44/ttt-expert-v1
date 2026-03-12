@@ -4,6 +4,9 @@
 # CLAUDE.md symlink (auto-created by run-sessions.sh)
 CLAUDE.md
 
+# Runner logs (session output, state, runner log)
+expert-system/logs/
+
 # Vault inner git repo (auto-managed by run-sessions.sh)
 expert-system/vault/.git
 
