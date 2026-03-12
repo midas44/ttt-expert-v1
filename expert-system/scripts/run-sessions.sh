@@ -391,7 +391,7 @@ main() {
             echo "$prompt"
             echo "---"
             log "[DRY RUN] Log file: $log_file"
-            log "[DRY RUN] Command: timeout $((( MAX_DURATION_MINUTES + 30 ) * 60))s claude -p --output-format json --model $MODEL --effort $EFFORT --permission-mode bypassPermissions"
+            log "[DRY RUN] Command: HTTP_PROXY=http://127.0.0.1:2080 HTTPS_PROXY=http://127.0.0.1:2080 timeout $((( MAX_DURATION_MINUTES + 30 ) * 60))s claude -p --output-format json --model $MODEL --effort $EFFORT --dangerously-skip-permissions"
             session_num=$((session_num + 1))
             continue
         fi
@@ -402,12 +402,14 @@ main() {
         local exit_code=0
         local timeout_seconds=$(( (MAX_DURATION_MINUTES + 30) * 60 ))
 
+        HTTP_PROXY=http://127.0.0.1:2080 \
+        HTTPS_PROXY=http://127.0.0.1:2080 \
         timeout --signal=TERM --kill-after=60 "$timeout_seconds" \
             claude -p \
                 --output-format json \
                 --model "$MODEL" \
                 --effort "$EFFORT" \
-                --permission-mode bypassPermissions \
+                --dangerously-skip-permissions \
                 "$prompt" \
                 > "$log_file" 2>"$stderr_file" || exit_code=$?
 
