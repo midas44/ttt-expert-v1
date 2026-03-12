@@ -46,6 +46,24 @@ done
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 die() { log "FATAL: $*" >&2; exit 1; }
 
+setup_claude_md() {
+    local target="$PROJECT_ROOT/CLAUDE.md"
+    if [[ -e "$target" && ! -L "$target" ]]; then
+        die "CLAUDE.md exists and is not a symlink — refusing to overwrite"
+    fi
+    ln -sf "CLAUDE+.md" "$target"
+    log "Created CLAUDE.md -> CLAUDE+.md symlink"
+}
+
+cleanup_claude_md() {
+    local target="$PROJECT_ROOT/CLAUDE.md"
+    if [[ -L "$target" ]]; then
+        rm "$target"
+        # Only log if fd 1 is still open (may be called during exit)
+        log "Removed CLAUDE.md symlink" 2>/dev/null || true
+    fi
+}
+
 read_yaml() {
     # read_yaml <key> — extract a value from config.yaml via python3+yaml
     python3 -c "
@@ -72,11 +90,22 @@ preflight() {
     mode=$(read_yaml "autonomy.mode")
     [[ "$mode" == "full" ]] || die "autonomy.mode is '$mode', expected 'full'"
 
-    # Check QMD daemon is running
+    # Check QMD MCP daemon is running
     if command -v qmd >/dev/null 2>&1; then
-        qmd status >/dev/null 2>&1 || log "WARNING: QMD daemon may not be running"
+        if pgrep -f "qmd.*mcp" >/dev/null 2>&1; then
+            log "QMD MCP daemon: running"
+        else
+            log "WARNING: QMD MCP daemon not running — starting it..."
+            qmd mcp --http --daemon &
+            sleep 3
+            if pgrep -f "qmd.*mcp" >/dev/null 2>&1; then
+                log "QMD MCP daemon: started"
+            else
+                log "WARNING: QMD MCP start failed — semantic search unavailable"
+            fi
+        fi
     else
-        log "WARNING: qmd not found — semantic search will be unavailable"
+        log "WARNING: qmd not found — semantic search unavailable"
     fi
 
     # Check playwright-vpn MCP server is registered (critical for UI exploration)
@@ -99,6 +128,9 @@ parse_config() {
     MODEL=$(read_yaml "autonomy.model")
     EFFORT=$(read_yaml "autonomy.effort")
     DELAY_MINUTES=$(read_yaml "session.delay_minutes")
+    DELAY_MINUTES_OFFHOURS=$(read_yaml "session.delay_minutes_offhours")
+    OFFHOURS_UTC=$(read_yaml "session.offhours_utc")
+    MAX_DURATION_MINUTES=$(read_yaml "session.max_duration_minutes")
     PHASE=$(read_yaml "phase.current")
 
     STATE_FILE="$LOG_DIR/runner-state.json"
@@ -109,6 +141,34 @@ parse_config() {
     fi
 
     mkdir -p "$LOG_DIR"
+}
+
+get_current_delay() {
+    local hour
+    hour=$(date -u +%-H)  # current UTC hour (no leading zero)
+    local start end
+    start="${OFFHOURS_UTC%%:*}"        # "15" from "15:00-03:00"
+    end="${OFFHOURS_UTC##*-}"          # "03:00"
+    end="${end%%:*}"                   # "03"
+
+    # Remove leading zeros for arithmetic
+    start=$((10#$start))
+    end=$((10#$end))
+    hour=$((10#$hour))
+
+    # Handle overnight range (e.g. 15-03 means hour>=15 OR hour<3)
+    if (( start > end )); then
+        if (( hour >= start || hour < end )); then
+            echo "$DELAY_MINUTES_OFFHOURS"
+            return
+        fi
+    else
+        if (( hour >= start && hour < end )); then
+            echo "$DELAY_MINUTES_OFFHOURS"
+            return
+        fi
+    fi
+    echo "$DELAY_MINUTES"
 }
 
 # ── State management ─────────────────────────────────────────────────────────
@@ -252,11 +312,52 @@ check_stop_conditions() {
     return 0
 }
 
+# ── Vault versioning ─────────────────────────────────────────────────────────
+commit_vault() {
+    local session_num="$1"
+    local exit_code="$2"
+    local duration="$3"
+    local vault_dir="$PROJECT_ROOT/expert-system/vault"
+
+    if [[ -d "$vault_dir/.git" ]] || \
+       git -C "$vault_dir" init --quiet 2>/dev/null; then
+        git -C "$vault_dir" add -A 2>/dev/null
+        git -C "$vault_dir" \
+            -c user.name="Expert System" -c user.email="expert@local" \
+            commit -m "Session $session_num (exit $exit_code, ${duration}s)" \
+            --allow-empty 2>/dev/null || true
+    fi
+}
+
+# ── Completion notification ──────────────────────────────────────────────────
+notify_completion() {
+    local reason="$1"
+    local total_sessions
+    total_sessions=$(get_state_field 'session_number')
+
+    log "━━━ Runner finished ━━━"
+    log "Reason: $reason"
+    log "Total sessions: $total_sessions"
+    log "State: $STATE_FILE"
+
+    # Desktop notification (non-fatal if unavailable)
+    if command -v notify-send >/dev/null 2>&1; then
+        notify-send -u normal "Expert System Runner" \
+            "Finished after $total_sessions sessions. Reason: $reason" 2>/dev/null || true
+    fi
+}
+
 # ── Main loop ─────────────────────────────────────────────────────────────────
 main() {
+    setup_claude_md
+    trap cleanup_claude_md EXIT
+
     preflight
     parse_config
     init_state
+
+    # Persist runner log to file
+    exec > >(tee -a "$LOG_DIR/runner.log") 2>&1
 
     local session_num
     session_num=$(( $(get_state_field "session_number") + 1 ))
@@ -266,6 +367,10 @@ main() {
     log "Phase: $PHASE"
     log "Log dir: $LOG_DIR"
     log "Stop file: $STOP_FILE"
+    log "Session timeout: $((MAX_DURATION_MINUTES + 30)) minutes"
+    log "Session delay: ${DELAY_MINUTES}min (working) / ${DELAY_MINUTES_OFFHOURS}min (off-hours: ${OFFHOURS_UTC} UTC)"
+
+    local stop_reason="unknown"
 
     while check_stop_conditions "$session_num"; do
         # Re-read config each iteration (phase may have changed)
@@ -275,6 +380,7 @@ main() {
         prompt=$(build_prompt "$session_num" "$PHASE")
 
         local log_file="$LOG_DIR/session-$(printf '%03d' "$session_num")-$(date '+%Y%m%d-%H%M%S').json"
+        local stderr_file="${log_file%.json}.stderr"
 
         log "━━━ Session $session_num ━━━"
 
@@ -285,7 +391,7 @@ main() {
             echo "$prompt"
             echo "---"
             log "[DRY RUN] Log file: $log_file"
-            log "[DRY RUN] Command: claude -p --output-format json --model $MODEL --effort $EFFORT --permission-mode bypassPermissions"
+            log "[DRY RUN] Command: timeout $((( MAX_DURATION_MINUTES + 30 ) * 60))s claude -p --output-format json --model $MODEL --effort $EFFORT --permission-mode bypassPermissions"
             session_num=$((session_num + 1))
             continue
         fi
@@ -294,23 +400,31 @@ main() {
         start_time=$(date +%s)
 
         local exit_code=0
-        claude -p \
-            --output-format json \
-            --model "$MODEL" \
-            --effort "$EFFORT" \
-            --permission-mode bypassPermissions \
-            "$prompt" \
-            > "$log_file" 2>&1 || exit_code=$?
+        local timeout_seconds=$(( (MAX_DURATION_MINUTES + 30) * 60 ))
+
+        timeout --signal=TERM --kill-after=60 "$timeout_seconds" \
+            claude -p \
+                --output-format json \
+                --model "$MODEL" \
+                --effort "$EFFORT" \
+                --permission-mode bypassPermissions \
+                "$prompt" \
+                > "$log_file" 2>"$stderr_file" || exit_code=$?
 
         local end_time
         end_time=$(date +%s)
         local duration=$(( end_time - start_time ))
 
+        if [[ "$exit_code" -eq 124 ]]; then
+            log "Session $session_num TIMED OUT after $((timeout_seconds / 60)) minutes"
+        fi
+
         update_state "$session_num" "$exit_code" "$duration" "$log_file"
+        commit_vault "$session_num" "$exit_code" "$duration"
 
         if [[ "$exit_code" -eq 0 ]]; then
             log "Session $session_num completed (${duration}s)"
-        else
+        elif [[ "$exit_code" -ne 124 ]]; then
             log "Session $session_num FAILED with exit code $exit_code (${duration}s)"
         fi
 
@@ -318,14 +432,27 @@ main() {
 
         # Inter-session delay (skip if this was the last session)
         if check_stop_conditions "$session_num" 2>/dev/null; then
-            log "Waiting ${DELAY_MINUTES} minutes before next session..."
-            sleep $(( DELAY_MINUTES * 60 ))
+            local current_delay
+            current_delay=$(get_current_delay)
+            local delay_mode="working hours"
+            [[ "$current_delay" -eq "$DELAY_MINUTES_OFFHOURS" ]] && delay_mode="off-hours"
+            log "Waiting ${current_delay} minutes before next session ($(date -u '+%H:%M') UTC, ${delay_mode})"
+            sleep $(( current_delay * 60 ))
         fi
     done
 
-    log "━━━ Runner finished ━━━"
-    log "Total sessions: $(get_state_field 'session_number')"
-    log "State: $STATE_FILE"
+    # Determine stop reason
+    if [[ -f "$STOP_FILE" ]]; then
+        stop_reason="stop file detected"
+    elif [[ "$MAX_SESSIONS" -gt 0 && "$session_num" -gt "$MAX_SESSIONS" ]]; then
+        stop_reason="max sessions reached ($MAX_SESSIONS)"
+    elif [[ "$(get_state_field 'consecutive_failures')" -ge "$CONSECUTIVE_FAILURE_LIMIT" ]]; then
+        stop_reason="consecutive failure limit ($CONSECUTIVE_FAILURE_LIMIT)"
+    else
+        stop_reason="all sessions completed"
+    fi
+
+    notify_completion "$stop_reason"
 }
 
 main
