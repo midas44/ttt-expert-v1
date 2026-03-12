@@ -79,6 +79,14 @@ preflight() {
         log "WARNING: qmd not found — semantic search will be unavailable"
     fi
 
+    # Check playwright-vpn MCP server is registered (critical for UI exploration)
+    if claude mcp get playwright-vpn >/dev/null 2>&1; then
+        log "playwright-vpn MCP: registered"
+    else
+        log "WARNING: playwright-vpn MCP server not registered — UI exploration will be unavailable!"
+        log "  Fix: see docs/playwright-mcp-fix.md for registration instructions"
+    fi
+
     log "Preflight OK"
 }
 

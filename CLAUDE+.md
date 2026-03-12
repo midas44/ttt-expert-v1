@@ -340,7 +340,7 @@ Access to live application on testing environments via Playwright (UI), Swagger/
   - If `true`: mutations are permitted on testing environments; log each mutation action and its rationale to `exploration_findings` before executing
 
 ### Playwright — UI Exploration
-Navigate flows, verify behavior against Figma/Confluence, screenshot evidence, note undocumented behaviors. Write to `vault/exploration/ui-flows/`.
+Use the **`playwright-vpn`** MCP server (tools prefixed `mcp__playwright-vpn__`) for all TTT environments. The built-in Playwright plugin cannot reach VPN hosts due to proxy inheritance. Load tools via `ToolSearch: select:mcp__playwright-vpn__browser_navigate,mcp__playwright-vpn__browser_snapshot` before first use. Navigate flows, verify behavior against Figma/Confluence, screenshot evidence, note undocumented behaviors. Write to `vault/exploration/ui-flows/`.
 
 ### Swagger/API — API Exploration
 Map endpoints to behavior, test responses and error handling. GET freely; ask permission for mutations. Write to `vault/exploration/api-findings/`.
@@ -471,7 +471,7 @@ When knowledge is insufficient for thorough test cases:
 | **mcp-obsidian** (`@mauricio.wolff/mcp-obsidian`) | Vault read/write/search, frontmatter, tags. Tools: `read_note`, `write_note`, `search_notes`, `list_directory`, `get_frontmatter`, `update_frontmatter`, `manage_tags`, `move_note`, `read_multiple_notes`, `get_notes_info`, `delete_note` |
 | **qmd-search** (`qmd mcp`) | Semantic/keyword search over vault. Tools: `search`, `vector_search`, `deep_search`, `get`, `multi_get` |
 | **sqlite-analytics** (`@bytebase/dbhub`) | Structured data queries and storage. Tools: `execute_sql`, `search_objects` |
-| **Playwright** | UI exploration — read-only intent by default |
+| **Playwright** (`playwright-vpn`) | UI exploration — read-only intent by default. **Must use `playwright-vpn` MCP server** (not the built-in plugin) for TTT environments — the built-in plugin cannot bypass `HTTP_PROXY` to reach VPN hosts. Tools: `browser_navigate`, `browser_snapshot`, `browser_click`, `browser_fill_form`, `browser_take_screenshot`, etc. Load via `ToolSearch` before first use. See `docs/playwright-mcp-fix.md`. |
 | **Swagger/API** (21 servers) | API exploration — GET freely, ask for mutations. Naming: `swagger-{env}-{service}-{group}` where env=`qa1`/`tm`/`stage`, service=`ttt`/`vacation`/`calendar`/`email`, group=`api`/`test`/`default`. See MISSION_DIRECTIVE §Testing Environments for full URL list. |
 | **PostgreSQL** (3 servers) | Data investigation — SELECT only. Naming: `postgres-{env}` where env=`qa1`/`tm`/`stage`. Auto-configured by `node .claude/scripts/sync-postgres-mcp.js --apply` from config.yaml + env files. |
 | **GitLab** | Tickets, MRs, CI/CD data (code via local clone) |
@@ -479,7 +479,7 @@ When knowledge is insufficient for thorough test cases:
 | **Figma** | Design specifications |
 | **Qase** | Existing test suites/cases |
 
-> **Scope split:** MCP servers above are registered across two scopes. Project-scope servers (`.claude/.mcp.json`): gitlab, confluence, postgres-qa1/postgres-tm/postgres-stage, figma, and all 21 swagger servers. User-scope servers (`~/.claude.json`): obsidian, qmd-search, sqlite-analytics, qase, playwright. Both scopes load automatically.
+> **Scope split:** MCP servers above are registered across two scopes. Project-scope servers (`.claude/.mcp.json`): gitlab, confluence, postgres-qa1/postgres-tm/postgres-stage, figma, and all 21 swagger servers. User-scope servers (`~/.claude.json`): obsidian, qmd-search, sqlite-analytics, qase. Local-scope server (`~/.claude.json` per-project): `playwright-vpn` (standalone `@playwright/mcp` with proxy bypass). Both scopes load automatically.
 
 ### mcp-obsidian Usage Notes
 - Use `write_note` with `mode: "append"` to add to existing notes without overwriting

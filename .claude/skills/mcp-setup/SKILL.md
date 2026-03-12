@@ -198,6 +198,36 @@ For Swagger/OpenAPI MCP servers that connect to unreliable or VPN-only endpoints
 Reference implementation: `.claude/mcp-tools/start-swagger-mcp.sh`
 Full documentation: `docs/swagger-mcp-connection-fix.md`
 
+## Adding a Playwright MCP Server (VPN Proxy Bypass)
+
+The built-in Playwright MCP plugin (`playwright@claude-plugins-official`) inherits `HTTP_PROXY` and cannot reach VPN hosts. Fix: register `@playwright/mcp` as a standalone MCP server with proxy bypass.
+
+```bash
+# Install locally
+npm install --prefix .claude/mcp-tools @playwright/mcp
+
+# Register with proxy bypass
+claude mcp add-json playwright-vpn '{
+  "command": "/usr/local/bin/node",
+  "args": [
+    ".claude/mcp-tools/node_modules/@playwright/mcp/cli.js",
+    "--browser", "chrome",
+    "--headless",
+    "--no-sandbox",
+    "--ignore-https-errors",
+    "--proxy-bypass", "*.noveogroup.com",
+    "--viewport-size", "1280x720"
+  ],
+  "env": {
+    "HTTP_PROXY": "",
+    "HTTPS_PROXY": "",
+    "NO_PROXY": "*.noveogroup.com"
+  }
+}' --scope local
+```
+
+Three proxy bypass layers: env vars (Node.js process), `NO_PROXY` (HTTP clients), `--proxy-bypass` (Chromium engine). Full details: `docs/playwright-mcp-fix.md`.
+
 ## Troubleshooting
 
 ### Servers not appearing in `/mcp`

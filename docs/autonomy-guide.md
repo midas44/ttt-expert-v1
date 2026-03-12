@@ -50,6 +50,10 @@ claude --version
 python3 -c "import yaml; print('pyyaml OK')"
 qmd status
 claude mcp list | head -5
+
+# Verify playwright-vpn MCP (critical for UI exploration)
+claude mcp get playwright-vpn
+# If missing, see docs/playwright-mcp-fix.md
 ```
 
 ### 2.2 Review config.yaml
@@ -416,7 +420,7 @@ Set `max_sessions: 0` for unlimited sessions (will run until another condition t
 - Read documentation from Confluence, GitLab, Figma, Qase
 - Send GET requests to Swagger/API endpoints on testing environments
 - Run SELECT queries on the PostgreSQL testing database
-- Navigate and screenshot the UI via Playwright
+- Navigate and screenshot the UI via `playwright-vpn` MCP (the built-in Playwright plugin cannot reach VPN hosts — see `docs/playwright-mcp-fix.md`)
 - Create and update vault notes
 - Insert and update SQLite records
 - Run QMD searches and embeddings
@@ -487,6 +491,30 @@ for sess in s['sessions'][-5:]:
 Fix the underlying issue, then either:
 - Reset the failure counter by editing `runner-state.json` (set `consecutive_failures: 0`)
 - Or delete `runner-state.json` and restart (loses session history)
+
+### No UI exploration happening
+
+Sessions skip Playwright entirely if `playwright-vpn` MCP isn't registered or fails to start:
+
+```bash
+# Verify registration
+claude mcp get playwright-vpn
+
+# If missing, register it (see docs/playwright-mcp-fix.md):
+npm install --prefix .claude/mcp-tools @playwright/mcp
+claude mcp add-json playwright-vpn '{
+  "command": "/usr/local/bin/node",
+  "args": [
+    ".claude/mcp-tools/node_modules/@playwright/mcp/cli.js",
+    "--browser", "chrome", "--headless", "--no-sandbox",
+    "--ignore-https-errors", "--proxy-bypass", "*.noveogroup.com",
+    "--viewport-size", "1280x720"
+  ],
+  "env": { "HTTP_PROXY": "", "HTTPS_PROXY": "", "NO_PROXY": "*.noveogroup.com" }
+}' --scope local
+```
+
+**Important:** Do NOT use the built-in Playwright plugin (`playwright@claude-plugins-official`) for TTT environments — it inherits `HTTP_PROXY` and gets 502/ERR_CONNECTION_RESET on all VPN hosts.
 
 ### Sessions producing no vault updates
 

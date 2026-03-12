@@ -17,19 +17,18 @@ description: >
 This skill provides instructions for automating browser interactions using Playwright,
 with special handling for the TTT QA environment behind VPN.
 
-## Two Approaches
-
-There are two ways to use Playwright in this project:
+## Three Approaches
 
 | Approach | When to Use | Proxy/VPN Support |
 |---|---|---|
-| **Playwright MCP plugin** | Simple tasks on public sites (no VPN) | No — inherits `HTTP_PROXY`, cannot bypass |
-| **Standalone Node.js script** | VPN sites (`*.noveogroup.com`), complex flows, screenshots to disk | Yes — unsets proxy env vars before launch |
+| **`playwright-vpn` MCP server** (recommended) | All TTT environments, interactive exploration, autonomous sessions | Yes — proxy bypassed via env vars + `--proxy-bypass` flag |
+| **Standalone Node.js script** | Complex multi-page flows, batch screenshots, custom Playwright API | Yes — unsets proxy env vars before launch |
+| **Built-in Playwright MCP plugin** | Public sites only (no VPN) | No — inherits `HTTP_PROXY`, cannot bypass |
 
-**Important:** The Playwright MCP plugin (`playwright@claude-plugins-official`) inherits
-the system `HTTP_PROXY=http://127.0.0.1:2080` at browser launch. VPN-only hosts like
-`ttt-qa-1.noveogroup.com` return **502 Bad Gateway** through this proxy. There is no way
-to configure proxy bypass in the MCP plugin. **Always use standalone scripts for VPN hosts.**
+**Important:** The built-in Playwright MCP plugin (`playwright@claude-plugins-official`) inherits
+the system `HTTP_PROXY=http://127.0.0.1:2080` and provides no way to override it. VPN hosts
+return **502 Bad Gateway** or **ERR_CONNECTION_RESET**. Use the `playwright-vpn` MCP server
+instead — it has proxy bypass built in. See `docs/playwright-mcp-fix.md` for full details.
 
 ---
 
@@ -167,12 +166,18 @@ try {
 
 ---
 
-## 2. Playwright MCP Plugin (Public Sites Only)
+## 2. playwright-vpn MCP Server (Recommended for TTT)
 
-The MCP plugin is useful for quick interactions with public websites that don't require
-VPN access.
+A standalone `@playwright/mcp` server registered with proxy bypass. Provides the same
+interactive MCP tools as the built-in plugin but can reach VPN hosts.
+
+### Setup
+
+Already registered as `playwright-vpn` in local scope. If missing, see `docs/playwright-mcp-fix.md`.
 
 ### Available MCP Tools
+
+All tools are prefixed with `mcp__playwright-vpn__`:
 
 | Tool | Description |
 |---|---|
@@ -183,8 +188,8 @@ VPN access.
 | `browser_press_key` | Press keyboard key |
 | `browser_hover` | Hover over element |
 | `browser_select_option` | Select dropdown option |
-| `browser_snapshot` | Get page accessibility snapshot |
-| `browser_take_screenshot` | Screenshot (inline, not to disk) |
+| `browser_snapshot` | Get page accessibility snapshot (preferred for actions) |
+| `browser_take_screenshot` | Take screenshot |
 | `browser_evaluate` | Run JS on page |
 | `browser_run_code` | Run Playwright code snippet |
 | `browser_wait_for` | Wait for condition |
@@ -201,24 +206,29 @@ VPN access.
 Tools must be loaded via `ToolSearch` before first use:
 
 ```
-ToolSearch: select:mcp__plugin_playwright_playwright__browser_navigate
+ToolSearch: select:mcp__playwright-vpn__browser_navigate
 ```
 
-### MCP Plugin Limitations
+### Usage Pattern
 
-- **Cannot bypass proxy** — VPN hosts will get 502 errors
-- **Screenshots are inline only** — cannot save to disk (use `browser_run_code` workaround)
-- **Single page context** — hard to manage multiple tabs/contexts
-- **No browser launch options** — cannot set proxy, user agent, viewport at launch time
+```
+1. ToolSearch: select:mcp__playwright-vpn__browser_navigate,mcp__playwright-vpn__browser_snapshot
+2. browser_navigate → URL
+3. browser_snapshot → get element refs
+4. browser_click / browser_fill_form → interact by ref
+5. browser_take_screenshot → capture evidence
+```
 
-### MCP Plugin + Standalone Hybrid
+---
 
-For advanced workflows, use MCP tools to interact with elements on public pages, but
-switch to standalone scripts when you need to:
-- Access VPN hosts
-- Save screenshots to disk
-- Control browser launch options
-- Run complex multi-step flows
+## 3. Built-in Playwright MCP Plugin (Public Sites Only)
+
+The built-in plugin (`playwright@claude-plugins-official`) is only useful for public
+websites. **Cannot reach VPN hosts** — returns 502/ERR_CONNECTION_RESET.
+
+Tools prefixed with `mcp__plugin_playwright_playwright__`. Same tool names as above.
+
+Use `playwright-vpn` instead for all TTT work.
 
 ---
 
@@ -226,10 +236,11 @@ switch to standalone scripts when you need to:
 
 | Env | URL | Status |
 |---|---|---|
-| QA-1 | `https://ttt-qa-1.noveogroup.com` | Primary test environment |
-| QA-2 | `https://ttt-qa-2.noveogroup.com` | Secondary (may be down) |
+| QA-1 | `https://ttt-qa-1.noveogroup.com` | Dev test environment |
+| Timemachine | `https://ttt-timemachine.noveogroup.com` | Dev test environment (CAS login) |
+| Stage | `https://ttt-stage.noveogroup.com` | Pre-prod test environment |
 
-Config file: `config/ttt/ttt.yml`
+Config files: `config/ttt/ttt.yml`, `config/ttt/envs/<name>.yml`
 
 CAS logout URL: `https://cas-demo.noveogroup.com/logout`
 
@@ -255,7 +266,7 @@ Example: `atushov-vacations-2026-02-27.png`
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| 502 Bad Gateway on VPN host | Browser using HTTP_PROXY | Use standalone script with `delete process.env.HTTP_PROXY` |
+| 502 Bad Gateway on VPN host | Browser using HTTP_PROXY | Use `playwright-vpn` MCP server (not built-in plugin). See `docs/playwright-mcp-fix.md` |
 | `ERR_MODULE_NOT_FOUND: playwright` | Not installed locally | `npm install --no-save playwright` |
 | Login doesn't work (stays on login page) | Wrong selectors | Use `#username` for input, `button[type="submit"]` for button |
 | Language switch doesn't work | EN already active or selector mismatch | Check if nav shows "RU" or "EN" first |

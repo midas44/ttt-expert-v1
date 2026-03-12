@@ -116,6 +116,7 @@ Use config/ttt/envs/* to get environment parameters, see skills: playwright-brow
 - **Secondary dev**: qa-1
 - **Primary prod**: stage
 - Note: compare dev and prod versions to investigate changes in current Sprint
+- **Playwright:** Use `playwright-vpn` MCP server (tools prefixed `mcp__playwright-vpn__`) for all UI exploration. The built-in Playwright plugin cannot reach VPN hosts. Load tools via `ToolSearch` before first use.
 - List of swaggers available for each test environment (see skill swagger-api):
 [envURL]/api/ttt/swagger-ui.html?urls.primaryName=api
 [envURL]/api/ttt/swagger-ui.html?urls.primaryName=test-api
