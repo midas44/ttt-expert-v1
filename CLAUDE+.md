@@ -473,13 +473,13 @@ When knowledge is insufficient for thorough test cases:
 | **sqlite-analytics** (`@bytebase/dbhub`) | Structured data queries and storage. Tools: `execute_sql`, `search_objects` |
 | **Playwright** | UI exploration — read-only intent by default |
 | **Swagger/API** (21 servers) | API exploration — GET freely, ask for mutations. Naming: `swagger-{env}-{service}-{group}` where env=`qa1`/`tm`/`stage`, service=`ttt`/`vacation`/`calendar`/`email`, group=`api`/`test`/`default`. See MISSION_DIRECTIVE §Testing Environments for full URL list. |
-| **PostgreSQL** | Data investigation — SELECT only |
+| **PostgreSQL** (3 servers) | Data investigation — SELECT only. Naming: `postgres-{env}` where env=`qa1`/`tm`/`stage`. Auto-configured by `node .claude/scripts/sync-postgres-mcp.js --apply` from config.yaml + env files. |
 | **GitLab** | Tickets, MRs, CI/CD data (code via local clone) |
 | **Confluence** | Requirements, documentation |
 | **Figma** | Design specifications |
 | **Qase** | Existing test suites/cases |
 
-> **Scope split:** MCP servers above are registered across two scopes. Project-scope servers (`.claude/.mcp.json`): gitlab, confluence, postgres, figma, and all 21 swagger servers. User-scope servers (`~/.claude.json`): obsidian, qmd-search, sqlite-analytics, qase, playwright. Both scopes load automatically.
+> **Scope split:** MCP servers above are registered across two scopes. Project-scope servers (`.claude/.mcp.json`): gitlab, confluence, postgres-qa1/postgres-tm/postgres-stage, figma, and all 21 swagger servers. User-scope servers (`~/.claude.json`): obsidian, qmd-search, sqlite-analytics, qase, playwright. Both scopes load automatically.
 
 ### mcp-obsidian Usage Notes
 - Use `write_note` with `mode: "append"` to add to existing notes without overwriting

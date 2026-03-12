@@ -21,11 +21,28 @@ RETRY_DELAY=3
 
 mkdir -p "$CACHE_DIR"
 
+resolve_host() {
+    # Extract hostname from URL, resolve via getent (reads /etc/hosts + DNS)
+    local url="$1"
+    local host port
+    host=$(echo "$url" | sed -n 's|^https\?://\([^/:]*\).*|\1|p')
+    [[ "$url" == https://* ]] && port=443 || port=80
+    local ip
+    ip=$(getent hosts "$host" 2>/dev/null | awk '{print $1; exit}')
+    if [[ -n "$ip" && "$ip" != "$host" ]]; then
+        echo "--resolve ${host}:${port}:${ip}"
+    fi
+}
+
 fetch_spec() {
     local url="$1"
     local out="$2"
-    curl --noproxy "${NO_PROXY:-}" \
-         -sf --max-time 10 \
+    local resolve_arg
+    resolve_arg=$(resolve_host "$url")
+    # shellcheck disable=SC2086
+    curl --noproxy '*' \
+         -sf --max-time 15 \
+         $resolve_arg \
          -o "$out" \
          "$url" 2>/dev/null
 }

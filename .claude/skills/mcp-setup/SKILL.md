@@ -145,6 +145,59 @@ Setting `HTTP_PROXY` and `HTTPS_PROXY` to empty strings in the server env overri
 curl -s --noproxy "target-host.com" -o /dev/null -w "%{http_code}" "https://target-host.com/endpoint"
 ```
 
+## DNS Resolution Issues (VPN Hosts)
+
+When MCP servers connect to hosts behind a VPN, DNS resolution can fail intermittently. Even with `/etc/hosts` entries and proxy bypass, `curl` may occasionally fail with "Could not resolve host" while `getent hosts` succeeds.
+
+### Symptoms
+
+- HTTP 000 in <5ms (instant failure, no network attempt)
+- "Could not resolve host" in verbose curl output
+- Works on retry, fails randomly
+- Other tools (`getent`, `ping`) resolve the host fine
+
+### Root Cause
+
+`curl`'s internal DNS resolver uses a different code path than `getent hosts`. On systems with VPN + proxy configurations, this can cause intermittent failures even when all proxy env vars are unset.
+
+### Fix: Pre-resolve + `--resolve` flag
+
+Pre-resolve the hostname via `getent hosts` (which reads `/etc/hosts` + system DNS reliably), then pass the IP to curl:
+
+```bash
+# Resolve hostname
+host="ttt-stage.noveogroup.com"
+ip=$(getent hosts "$host" | awk '{print $1; exit}')
+
+# Use --resolve to pin the IP
+curl -sk --noproxy '*' --resolve "${host}:443:${ip}" "https://${host}/api/..."
+```
+
+This pattern is used in the swagger MCP wrapper script (`.claude/mcp-tools/start-swagger-mcp.sh`) and should be applied whenever writing scripts that fetch from VPN hosts.
+
+### /etc/hosts Entries
+
+Some VPN hosts don't resolve via DNS at all and require `/etc/hosts` entries:
+
+```
+10.0.4.220 ttt-qa-1.noveogroup.com
+```
+
+Verify resolution: `getent hosts <hostname>` — should return an internal IP (10.x.x.x), NOT a public IP (80.x.x.x).
+
+## Swagger MCP Wrapper Pattern
+
+For Swagger/OpenAPI MCP servers that connect to unreliable or VPN-only endpoints, use a wrapper script instead of running `npx` directly. The wrapper provides:
+
+1. **Local package install** — no need for `npx -y` (which needs proxy to reach npm)
+2. **Spec caching** — fetches JSON spec once, serves from local file
+3. **DNS pre-resolution** — `getent hosts` → `--resolve host:port:ip`
+4. **Retry on cold start** — handles transient 502s
+5. **Per-server cache files** — named by `SERVER_NAME` env var
+
+Reference implementation: `.claude/mcp-tools/start-swagger-mcp.sh`
+Full documentation: `docs/swagger-mcp-connection-fix.md`
+
 ## Troubleshooting
 
 ### Servers not appearing in `/mcp`

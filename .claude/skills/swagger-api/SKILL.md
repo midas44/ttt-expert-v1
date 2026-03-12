@@ -134,6 +134,34 @@ The `time` field uses ISO 8601 format without timezone: `YYYY-MM-DDTHH:mm:ss`.
 | `clean-up-using-pst` | POST | `/v1/test/reports/cleanup-extended` | Clean up extended report time |
 | `trigger-optimized-statistic-report-sync-using-pst` | POST | `/v1/test/statistic-reports` | Sync statistic report cache |
 
+## Connection Architecture
+
+All 21 Swagger MCP servers use a shared wrapper script at `.claude/mcp-tools/start-swagger-mcp.sh`. The wrapper handles three problems that cause raw `@ivotoby/openapi-mcp-server` to fail:
+
+1. **Spec caching** — fetches the swagger JSON spec once and caches it locally per server. Subsequent startups use the cache (instant) and attempt a non-blocking refresh.
+2. **DNS resolution** — uses `getent hosts` to pre-resolve VPN hostnames, then passes `--resolve host:port:ip` to curl. This bypasses intermittent DNS failures where curl's own resolver fails to resolve VPN hosts.
+3. **Retry logic** — retries up to 5 times on first-time cache build (when the spec endpoint returns 502 transiently).
+
+### Cache Files
+
+Cache directory: `.claude/mcp-tools/cache/`
+
+Each server gets its own file: `swagger-spec-{SERVER_NAME}.json`
+
+Example: `swagger-spec-swagger-stage-ttt-api.json`
+
+### Troubleshooting Connection Failures
+
+| Symptom | Fix |
+|---------|-----|
+| Server shows "failed" in `/mcp` | Check cache exists: `ls .claude/mcp-tools/cache/swagger-spec-swagger-{env}-{service}-{group}.json` |
+| No cache file for a server | Seed manually: `curl -sk --resolve "host:443:ip" -o cache/swagger-spec-{name}.json "spec-url"` |
+| All servers for one env fail | Check DNS: `getent hosts ttt-{env}.noveogroup.com` — must resolve to internal IP |
+| qa-1 servers fail with 502 | Verify `/etc/hosts` has `10.0.4.220 ttt-qa-1.noveogroup.com` |
+| MCP tool returns stale data | Delete the cache file and restart Claude Code |
+
+For full details see `docs/swagger-mcp-connection-fix.md`.
+
 ## Discovering New Endpoints
 
 ```bash
