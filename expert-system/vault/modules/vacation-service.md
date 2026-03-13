@@ -7,8 +7,8 @@ tags:
   - absences
   - priority-1
 created: '2026-03-12'
-updated: '2026-03-12'
-status: draft
+updated: '2026-03-13'
+status: active
 related:
   - '[[system-overview]]'
 branch: release/2.1
@@ -41,4 +41,4 @@ Manages all absence types: vacations, days-off, sick leaves.
 - [[ttt-service]]
 - [[calendar-service]]
 - [[vacation-workflows]]
-- [[vacation-day-calculations]]
+- [[vacation-day-calculation]]

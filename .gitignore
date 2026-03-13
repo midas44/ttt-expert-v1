@@ -7,10 +7,16 @@ CLAUDE.md
 # Runner logs (session output, state, runner log)
 expert-system/logs/
 
-# Vault inner git repo (auto-managed by run-sessions.sh)
-expert-system/vault/.git
+# Vault (has its own inner git repo, managed by run-sessions.sh)
+expert-system/vault/
 
 # Secret files
 .claude/context/secrets/
 .claude/context/gitlab-credentials.md
 config/ttt/envs/qa-1.yml
+
+# Playwright MCP logs
+.playwright-mcp/
+
+# Exploration artefacts (screenshots, etc.)
+artefacts/

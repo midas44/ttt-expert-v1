@@ -6,8 +6,8 @@ tags:
   - email
   - notifications
 created: '2026-03-12'
-updated: '2026-03-12'
-status: draft
+updated: '2026-03-13'
+status: active
 related:
   - '[[system-overview]]'
 branch: release/2.1

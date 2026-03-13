@@ -574,12 +574,43 @@ Common causes:
 - **QMD daemon not running**: runner auto-starts it, but check `pgrep -f "qmd.*mcp"`
 - **MCP server crashed**: `claude mcp list` to check, restart as needed
 
+### Proxy / VPN drops causing timeouts
+
+Claude Code requires `HTTP_PROXY=http://127.0.0.1:2080` (AdGuard VPN in SOCKS mode). If the VPN drops mid-session, the `claude -p` process hangs on API calls until the 270-min timeout kills it.
+
+**Prevention:** A cron-based watchdog checks the proxy every 3 minutes and restarts the VPN if it's down:
+
+```bash
+# Add to crontab (crontab -e):
+*/3 * * * * /home/v/Dev/ttt-expert-v1/expert-system/scripts/proxy-watchdog.sh >> /home/v/Dev/ttt-expert-v1/expert-system/logs/proxy-watchdog.log 2>&1
+```
+
+The watchdog script (`expert-system/scripts/proxy-watchdog.sh`) tests connectivity through the proxy and runs `adguardvpn-cli disconnect && adguardvpn-cli connect -l FI` on failure. Logs only appear when a restart was needed.
+
+**Diagnosis:** If you see a session timeout in `runner-state.json`, check if the proxy was down at that time:
+
+```bash
+# Timed-out sessions
+python3 -c "
+import json
+with open('expert-system/logs/runner-state.json') as f:
+    s = json.load(f)
+for sess in s['sessions']:
+    if sess['exit_code'] == 124:
+        print(f'Session {sess[\"session\"]}: TIMED OUT at {sess[\"timestamp\"]}')
+"
+
+# Proxy restart events around that time
+grep "Proxy" expert-system/logs/proxy-watchdog.log
+```
+
 ### Sessions timing out
 
 If sessions consistently hit the timeout (exit code 124), check:
 - `max_duration_minutes` in config.yaml — increase if sessions legitimately need more time
 - The stderr file for hung MCP calls or infinite loops
 - Whether an MCP server is unresponsive (e.g., VPN disconnected)
+- Whether the proxy was down (see "Proxy / VPN drops" above)
 
 ```bash
 # Find timed-out sessions
@@ -712,6 +743,8 @@ git -C expert-system/vault log --oneline --stat
 | `expert-system/config.yaml` | All configuration including autonomy settings |
 | `expert-system/scripts/run-sessions.sh` | The runner script |
 | `expert-system/scripts/coverage-report.sh` | Phase A coverage estimation dashboard |
+| `expert-system/scripts/proxy-watchdog.sh` | Cron watchdog — restarts VPN proxy if down |
+| `expert-system/logs/proxy-watchdog.log` | Proxy restart events (cron output) |
 | `expert-system/logs/runner-state.json` | Session counter, failure tracking |
 | `expert-system/logs/runner.log` | Runner's own timestamped log (auto-persisted) |
 | `expert-system/logs/session-NNN-*.json` | Per-session Claude stdout (clean JSON) |
@@ -720,4 +753,5 @@ git -C expert-system/vault log --oneline --stat
 | `expert-system/vault/_INVESTIGATION_AGENDA.md` | Prioritized investigation items |
 | `expert-system/vault/_KNOWLEDGE_COVERAGE.md` | Coverage metrics |
 | `expert-system/vault/.git` | Vault inner git repo (auto-managed, per-session commits) |
+| `artefacts/` | UI screenshots and other exploration artefacts (gitignored) |
 | `CLAUDE+.md` | Master prompt (symlinked as `CLAUDE.md` during runner sessions) |

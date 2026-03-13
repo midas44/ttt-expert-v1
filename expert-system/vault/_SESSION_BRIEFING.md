@@ -4,77 +4,67 @@ tags:
   - session
   - briefing
 created: '2026-03-12'
-updated: '2026-03-12'
+updated: '2026-03-13'
 status: active
 ---
 # Session Briefing
 
-## Current Session
-- **Session**: 1 (Bootstrap + Orientation Start)
-- **Date**: 2026-03-12
-- **Mode**: Full autonomy
-- **Phase**: Knowledge Acquisition (Phase A)
-- **Branch**: release/2.1
+## Session 13 — 2026-03-13 (Period API + Day-Off Conflicts + Employee Reports)
 
-## Bootstrap Status: COMPLETE
-All infrastructure initialized:
-- Vault structure created (15 directories)
-- SQLite tables initialized (6 tables)
-- QMD collection active (expert-vault)
-- Repository cloned (release/2.1)
-- All 8 MCP servers verified (3 PostgreSQL, 3 Swagger, Confluence, Qase)
+**Phase**: Knowledge Acquisition | **Mode**: Full Autonomy
 
-## Orientation Findings
+### Completed
 
-### Architecture (mapped)
-- 4 backend services: TTT (54 controllers, 119 services), Vacation (35 controllers, 76 services), Calendar (8 controllers), Email (4 controllers)
-- React frontend: 11 modules, ~500+ source files, 87 vacation components
-- 366 REST endpoints, 290 DB migrations, 21 scheduled jobs
-- PostgreSQL 12.2: 86 tables across 4 schemas (ttt_backend, ttt_vacation, ttt_calendar, ttt_email)
-- 11 global roles (more than documented — includes OFFICE_HR, TECH_LEAD, VIEW_ALL, CHIEF_ACCOUNTANT, CHIEF_OFFICER)
+1. **Period advance/revert live testing** — DONE
+   - Tested all GET/PATCH endpoints for report and approve periods on timemachine
+   - Mapped full business rules: report period (no jump limit, must be >= approve), approve period (1-month jump max, 2-month back limit, blocked by extended periods)
+   - Found 4 bugs: missing first-day-of-month validation on approve PATCH (HIGH), NPE on null body (HIGH), stack trace leakage (MEDIUM), permission inconsistency on report min/max (MEDIUM)
+   - Extended periods mechanism documented: time-limited employee period reopening, cron cleanup
+   - RabbitMQ events: PeriodChangedEvent (advance) vs PeriodReopenedEvent (revert)
+   - All mutations reverted after testing
+   - Vault note: [[period-api-live-testing]]
 
-### Key Business Logic (discovered)
-- **Vacation modes**: `advanceVacation` toggle per office drives fundamentally different calculation behavior
-- **Absence types**: Vacations (multi-approver), Sick Leaves (accountant-driven), Days Off (two-table pattern with approval)
-- **Period model**: REPORT/APPROVE dual periods per salary office, accountants advance monthly
-- **20+ salary offices**: Celestial body names, multinational (Russia, Serbia, Montenegro, Georgia, Armenia, France, Uzbekistan)
+2. **Day-off calendar conflict code analysis** — DONE
+   - Mapped 4 distinct conflict paths (more complex than expected):
+     - Path A: CalendarChanged → silent ledger MOVE (no status change)
+     - Path B: CalendarDeleted → DELETED_FROM_CALENDAR status + physical ledger delete
+     - Path C: PeriodChanged → REJECTED by system (NEW requests only)
+     - Path D: Employee office change → DELETED_FROM_CALENDAR (year-wide)
+   - Found architecture issues: entity state bug in updateAll(), race condition between Path A/B, PreviousWorkingDayCalculator weekend-only assumption
+   - Confirmed all 82 DELETED_FROM_CALENDAR records trace to single Path B event (June 2025 holiday deletion)
+   - Hardcoded production URL in all notification templates
+   - Vault note: [[dayoff-calendar-conflict-code-analysis]]
 
-### External Sources (pulled)
-- **Confluence**: 8 pages fetched including 4 detailed vacation requirement pages, cron jobs, tracker integration
-- **Qase**: 1,116 test cases in 258 suites — all manual, no steps, draft quality. Statistics/sick leaves/availability empty.
-- **Key Figma nodes** identified: 33810-213656, 38600-296992, 33112-18523
+3. **Employee Reports row expansion** — DONE
+   - RESOLVED previous UNCLEAR finding: expansion is chevron-only (16x16 icon), NOT row click
+   - This deviates from Confluence requirement §4.1 ("Row click anywhere except name")
+   - cursor:pointer on full row is misleading UX
+   - Full component architecture mapped: EmployeeRow → useProjectBreakdown → saga → GET /v1/statistic/report/projects
+   - Found stale cache bug: projectBreakdown keyed by login only (no date range), projectDataLoaded never resets on month change
+   - Double sorting (API layer + hook) — redundant but harmless
+   - Playwright verification: captured screenshots of collapsed and expanded states
+   - Updated [[figma-vs-live-ui-comparison]] with resolved finding
+   - Vault note: [[employee-reports-row-expansion]]
 
-### Data Scale (timemachine env)
-1,841 employees, 3.5M task reports, 666K tasks, 3,138 projects, 14,195 vacations
+### Key Findings
+- **BUG (HIGH)**: Approve period PATCH accepts any day of month (missing validation)
+- **BUG (HIGH)**: Period PATCH with null/empty body → 500 NPE
+- **BUG (MEDIUM)**: Stack trace leakage on invalid date format
+- **BUG (MEDIUM)**: GET report period min/max rejects API token while approve min/max accepts it
+- **BUG (MEDIUM)**: Employee Reports row expansion — chevron-only vs spec's row click
+- **BUG (MEDIUM)**: Stale project breakdown cache on date change
+- **ARCHITECTURE**: 4 distinct calendar-dayoff conflict paths with different behaviors
+- **ARCHITECTURE**: Entity state inconsistency in DELETED_FROM_CALENDAR bulk update
 
-## Vault Notes Created This Session
-1. architecture/system-overview.md
-2. architecture/database-schema.md
-3. architecture/roles-permissions.md
-4. architecture/backend-architecture.md
-5. architecture/frontend-architecture.md
-6. modules/ttt-service.md
-7. modules/vacation-service.md
-8. modules/calendar-service.md
-9. modules/email-service.md
-10. modules/frontend-app.md
-11. analysis/absence-data-model.md
-12. analysis/office-period-model.md
-13. exploration/data-findings/db-data-overview-tm.md
-14. external/requirements/confluence-overview.md
-15. external/requirements/REQ-accrued-vacation-days.md
-16. external/requirements/REQ-advance-vacation.md
-17. external/requirements/REQ-vacation-day-corrections.md
-18. external/requirements/REQ-over-reporting-notification.md
-19. external/existing-tests/qase-overview.md
-20. external/EXT-cron-jobs.md
-21. external/EXT-tracker-integration.md
+### Session Statistics
+- Vault notes: 105 (102 prior + 3 new)
+- Analysis runs: 63 (+1)
+- Design issues: 101 (+8)
+- Exploration findings: 97 (+10)
+- External refs: 51 (unchanged)
 
-## Next Session Priorities
-1. Deep-read remaining Confluence requirements (Accounting, Confirmation, Planner, Statistics, Vacations parent)
-2. Explore Vacation API via Swagger — map endpoints to business operations
-3. Database schema deep-dive: vacation_payment, employee_vacation, office_annual_leave tables
-4. GitLab tickets: Sprint 14-15 for recent changes
-5. Begin UI exploration via Playwright — login, vacation request flow
-6. Frontend code analysis: vacation module components and state management
-7. Backend code analysis: vacation service implementation classes
+### Next Session Priorities
+1. Payment flow live testing
+2. Figma tooltip interactions (sick leave display, norm tooltips)
+3. Remaining Google Docs (test plan, vacation testing notes, knowledge transfer)
+4. Google Sheet notification spec deeper analysis

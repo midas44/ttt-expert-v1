@@ -340,7 +340,7 @@ Access to live application on testing environments via Playwright (UI), Swagger/
   - If `true`: mutations are permitted on testing environments; log each mutation action and its rationale to `exploration_findings` before executing
 
 ### Playwright — UI Exploration
-Use the **`playwright-vpn`** MCP server (tools prefixed `mcp__playwright-vpn__`) for all TTT environments. The built-in Playwright plugin cannot reach VPN hosts due to proxy inheritance. Load tools via `ToolSearch: select:mcp__playwright-vpn__browser_navigate,mcp__playwright-vpn__browser_snapshot` before first use. Navigate flows, verify behavior against Figma/Confluence, screenshot evidence, note undocumented behaviors. Write to `vault/exploration/ui-flows/`.
+Use the **`playwright-vpn`** MCP server (tools prefixed `mcp__playwright-vpn__`) for all TTT environments. The built-in Playwright plugin cannot reach VPN hosts due to proxy inheritance. Load tools via `ToolSearch: select:mcp__playwright-vpn__browser_navigate,mcp__playwright-vpn__browser_snapshot` before first use. Navigate flows, verify behavior against Figma/Confluence, screenshot evidence, note undocumented behaviors. Write to `vault/exploration/ui-flows/`. Save all screenshots to the `artefacts/` directory (e.g. `artefacts/page-name.png`).
 
 ### Swagger/API — API Exploration
 Map endpoints to behavior, test responses and error handling. GET freely; ask permission for mutations. Write to `vault/exploration/api-findings/`.

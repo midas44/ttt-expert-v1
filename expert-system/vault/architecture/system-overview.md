@@ -5,8 +5,8 @@ tags:
   - overview
   - microservices
 created: '2026-03-12'
-updated: '2026-03-12'
-status: draft
+updated: '2026-03-13'
+status: active
 related:
   - '[[ttt-service]]'
   - '[[vacation-service]]'
