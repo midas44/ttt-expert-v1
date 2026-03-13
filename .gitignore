@@ -1,1 +1,16 @@
+# MCP server config (contains tokens)
 .mcp.json
+
+# CLAUDE.md symlink (auto-created by run-sessions.sh)
+CLAUDE.md
+
+# Runner logs (session output, state, runner log)
+expert-system/logs/
+
+# Vault inner git repo (auto-managed by run-sessions.sh)
+expert-system/vault/.git
+
+# Secret files
+.claude/context/secrets/
+.claude/context/gitlab-credentials.md
+config/ttt/envs/qa-1.yml

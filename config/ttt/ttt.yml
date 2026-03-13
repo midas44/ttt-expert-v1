@@ -1,0 +1,18 @@
+#Project properties
+
+appName: "TTT (TimeTrackingTool aka TimeReportingTool)"
+
+#replace *** with env name
+appUrl: "https://ttt-***.noveogroup.com"
+
+# dev-new, preprod, timemachine, stage, qa-1, qa-2
+env: "qa-1"
+
+#en, ru
+#(ru supported for MainPage only for lang switcher test)
+lang: "en"
+
+dashboardPath: /report
+logoutUrl: https://cas-demo.noveogroup.com/logout
+waitUntil: networkidle
+logoutSuccessText: Logout successful

@@ -1,0 +1,15 @@
+#Env properties
+
+dbHost: "10.0.4.220"
+
+dbPort: 5433
+
+initialDatabase: "ttt"
+
+dbUsername: "ttt"
+
+dbPassword: CHANGE_ME
+
+apiToken: "CHANGE_ME"
+
+casLogin: false

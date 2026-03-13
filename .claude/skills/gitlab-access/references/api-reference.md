@@ -56,6 +56,26 @@ Auth header: `PRIVATE-TOKEN: <token>` (read from `.claude/.mcp.json`)
 | PAT info | GET | `/personal_access_tokens/self` | Shows scopes, expiry |
 | GitLab version | GET | `/version` | |
 
+### Pipelines
+
+| Operation | Method | Endpoint | Notes |
+|---|---|---|---|
+| List pipelines | GET | `/projects/:id/pipelines?per_page=10&order_by=id&sort=desc` | Do NOT use `scope=all` — rejected by this GitLab version |
+| Filter by branch | GET | `/projects/:id/pipelines?ref=BRANCH&per_page=10` | |
+| Filter by status | GET | `/projects/:id/pipelines?status=success` | Values: `success`, `failed`, `running`, `pending`, `skipped`, `canceled` |
+| Get pipeline | GET | `/projects/:id/pipelines/:pipeline_id` | Full pipeline details |
+| List pipeline jobs | GET | `/projects/:id/pipelines/:pipeline_id/jobs` | |
+
+### Repository
+
+| Operation | Method | Endpoint | Notes |
+|---|---|---|---|
+| Compare commits | GET | `/projects/:id/repository/compare?from=SHA1&to=SHA2` | Returns `commits[]` and `diffs[]` with changed files |
+| List branches | GET | `/projects/:id/repository/branches?per_page=20&order_by=updated&sort=desc` | |
+| Get branch | GET | `/projects/:id/repository/branches/:branch` | URL-encode branch name (e.g. `release%2F2.1`) |
+| Get commit | GET | `/projects/:id/repository/commits/:sha` | |
+| List commits | GET | `/projects/:id/repository/commits?ref_name=BRANCH&per_page=20` | |
+
 ### Other
 
 | Operation | Method | Endpoint | Notes |

@@ -1,6 +1,11 @@
 {
+  "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": [
-    "gitlab"
+    "gitlab",
+    "confluence",
+    "ttt-swagger-test"
   ],
-  "enableAllProjectMcpServers": true
+  "enabledPlugins": {
+    "playwright@claude-plugins-official": true
+  }
 }

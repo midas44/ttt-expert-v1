@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "@ivotoby/openapi-mcp-server": "^1.14.0",
+    "@playwright/mcp": "^0.0.68"
+  }
+}

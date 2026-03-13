@@ -1,0 +1,15 @@
+#Env properties
+
+dbHost: "10.0.6.53"
+
+dbPort: 5433
+
+initialDatabase: "ttt"
+
+dbUsername: "ttt"
+
+dbPassword: 123456
+
+apiToken: "c603661a-9057-42b9-b216-88e95784b9a0"
+
+casLogin: true
