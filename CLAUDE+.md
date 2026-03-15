@@ -446,11 +446,14 @@ Per module/feature:
 
 ### Knowledge Updates During Generation
 
-When knowledge is insufficient for thorough test cases:
-- Pause generation for that area
-- Investigate (code, external sources, live app)
-- Update vault and SQLite
-- Resume with improved knowledge
+Phase B is not just generation — it requires **deeper, more specific investigation** than Phase A. Phase A built breadth; Phase B needs depth. The context window is 1M tokens and vault notes can be up to 2000 words, so do not compress prematurely.
+
+When generating test cases for a feature:
+- **Always investigate deeper first** — read the actual code paths, trace edge cases through the codebase, verify behavior on the live app, check boundary conditions in the database
+- **Expand existing vault notes** with implementation details, error paths, validation rules, and state transitions discovered during focused investigation
+- **Create new notes** for feature-specific findings (e.g., form validation rules, API error responses, permission matrices) that weren't captured in Phase A's broader sweep
+- **Pause generation** if knowledge is insufficient — investigate first, update vault and SQLite, then resume with improved knowledge
+- The knowledge base should grow significantly during Phase B — detailed test cases require detailed knowledge
 
 ---
 
