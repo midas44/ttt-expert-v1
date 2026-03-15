@@ -9,69 +9,66 @@ status: active
 ---
 # Session Briefing
 
-## Current Session: 48
-**Timestamp**: 2026-03-15T06:00:00Z
-**Phase**: generation (Phase B — FIRST SESSION)
+## Current Session: 49
+**Timestamp**: 2026-03-15T08:00:00Z
+**Phase**: generation (Phase B)
 **Mode**: full (unattended)
 
-## Session 48 Summary
+## Session 49 Summary
 
-First Phase B (test documentation generation) session. Generated Statistics module test plan and test cases (111 cases).
+Generated Sick Leave module test plan and test cases (120 cases) — second Phase B module.
 
-### 1. Phase B Transition
+### 1. Sick Leave Module — Generated
 
-Config updated by human since session 47: `phase.current: "generation"`, `phase.generation_allowed: true`. Phase B now active.
+**sick-leave.xlsx** (11 tabs, unified workbook):
 
-### 2. Statistics Module — Generated
+**Plan tabs (3):**
+- Plan Overview: scope, objectives, approach, test data strategy, environment requirements, Qase gap analysis
+- Feature Matrix: 8 feature areas × 7 test types, 120 total cases
+- Risk Assessment: 12 risks (2 Critical, 4 High, 4 Medium, 2 Low)
 
-**test-plan-statistics.xlsx** (3 sheets):
-- Overview: scope, objectives, approach, test data strategy, environment requirements
-- Feature Matrix: 13 feature areas × 6 test types, 121 total planned cases
-- Risk Assessment: 12 risks identified (2 Critical, 4 High, 4 Medium, 2 Low)
-
-**test-cases-statistics.xlsx** (7 sheets, 111 cases):
-| Sheet | Cases | Priority H/M/L |
-|-------|-------|-----------------|
-| General Statistics UI | 26 | 10/9/7 |
-| Employee Reports UI | 33 | 17/11/5 |
-| Statistics API | 16 | 5/8/3 |
-| Norm Calculation | 10 | 6/3/1 |
-| Access Control | 9 | 5/3/1 |
-| Data & Cache | 9 | 1/4/4 |
-| Export & Norm CSV | 8 | 1/4/3 |
+**Test suite tabs (8, 120 cases):**
+| Sheet | Cases | Priority C/H/M/L |
+|-------|-------|-------------------|
+| TS-SL-CRUD | 22 | 0/10/7/5 |
+| TS-SL-DualStatus | 15 | 2/5/5/3 |
+| TS-SL-Accounting | 18 | 1/3/9/5 |
+| TS-SL-Files | 12 | 0/6/4/2 |
+| TS-SL-Notifications | 14 | 0/4/8/2 |
+| TS-SL-Validation | 15 | 0/5/7/3 |
+| TS-SL-Permissions | 13 | 1/7/4/1 |
+| TS-SL-ManagerView | 11 | 0/4/5/2 |
 
 Key coverage areas:
-- 13 permission-gated tabs, role-based visibility
-- Employee Reports: search (Latin/Cyrillic/keyboard layout), norm display (personal vs budget), deviation formula, N/A% edge case
-- API: mixed HOURS/MINUTES units across 12+ endpoints, 500-on-missing-params bug, security gaps
-- Norm: personal vs budget, admin vacation handling, partial month, overlapping absences
-- Cache: 3 update paths, race condition, 2-month sync window
-- Export: 10 CSV endpoints, Google Sheets link, #3400 individual norm
+- Full CRUD lifecycle: create/edit/close/reopen/delete with all field combinations
+- Dual status model: main (OPEN/CLOSED/REJECTED/DELETED + computed SCHEDULED/OVERDUE) × accounting (NEW/PROCESSING/PAID/REJECTED) with coupling effects
+- Accounting workflow: inline dropdown, comments, filters, 10-column table, backlog visibility
+- File handling: upload/download/delete, 5-file limit, 5MB limit, MIME bypass security bug
+- 5 notification event types: created (2 variants), changed (4 subtypes), deleted (2 variants), files added, vacation overlap
+- Validation: date rules, number field (optional→required on close), overlap detection (client-side 100-cap + server-side 409)
+- Permissions: 6 roles tested, 3 security bugs verified (BUG-SL-1 no creation check, BUG-SL-6 router gap, API token 403)
+- Manager view: 2 tabs, force=true bypass, no file upload, employee search
 
-### 3. SQLite Updates
-- 111 rows in test_case_tracking (first entries)
-- 1 analysis_run logged
-
-### Vault Updates
-- 0 new knowledge notes (Phase B uses existing knowledge)
-- Session briefing and control files updated
+### 2. SQLite Updates
+- 120 rows added to test_case_tracking (total: 231)
+- 1 analysis_run logged (session-49)
 
 ## Current State
-- Vault notes: 159
-- Analysis runs: 133
+- Vault notes: 159 (unchanged — no new knowledge notes needed, Phase A coverage sufficient)
+- Analysis runs: 134
 - Design issues: 121
 - Exploration findings: 173
 - External refs: 65
 - Module health: 25 modules tracked
-- Test case tracking: 111 (Statistics module)
+- Test case tracking: 231 (111 statistics + 120 sick leave)
 
 ## Phase B Progress
 
 | Module | Priority | Qase Existing | Generated | Status |
 |--------|----------|---------------|-----------|--------|
 | Statistics | #1 | 0 | 111 | DONE |
-| Sick Leave lifecycle | #2 | 0 lifecycle | 0 | Next |
-| Day-Off lifecycle | #3 | 0 lifecycle | 0 | Pending |
+| Sick Leave lifecycle | #2 | 57 (display only) | 120 | DONE |
+| Day-Off lifecycle | #3 | 19 (display only) | 0 | Next |
 | Security/Permissions | #4 | 0 | 0 | Pending |
 | Accounting supplements | #5 | 127 | 0 | Pending |
 | Vacations supplements | #6 | 200+ | 0 | Pending |
@@ -79,6 +76,6 @@ Key coverage areas:
 | Admin supplements | #8 | 115 | 0 | Pending |
 
 ## Next Session Plan
-1. Generate Sick Leave lifecycle test plan + test cases (priority #2)
-2. Comprehensive sick leave coverage: CRUD lifecycle, dual status model, accounting workflow, file handling, notifications, validation, permissions
-3. 0 lifecycle CRUD cases in Qase despite 57 display/notification cases — full lifecycle generation needed
+1. Generate Day-Off lifecycle test plan + test cases (priority #3)
+2. Coverage: request lifecycle (create/approve/reject/delete/edit), 4 calendar conflict paths, ledger mechanics, dual-table pattern, permission model, search types
+3. 0 lifecycle cases in Qase (19 display cases exist) — full lifecycle generation needed

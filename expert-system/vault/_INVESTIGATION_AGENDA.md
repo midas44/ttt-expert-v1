@@ -15,7 +15,7 @@ status: active
 - P2: Medium — within next 5 sessions
 - P3: Low — backlog
 
-## Completed (Sessions 1-48)
+## Completed (Sessions 1-49)
 <details>
 <summary>Sessions 1-9 completed items (click to expand)</summary>
 
@@ -118,7 +118,7 @@ status: active
 </details>
 
 <details>
-<summary>Sessions 30-48 completed items (click to expand)</summary>
+<summary>Sessions 30-49 completed items (click to expand)</summary>
 
 ### Session 30
 - [x] Maintenance §9.4: Vault audit (154 notes, all indexed), SQLite cleanup (severity normalization, finding_type 37→13)
@@ -152,24 +152,24 @@ status: active
 - [x] Statistics module: test-plan-statistics.xlsx (3 sheets) + test-cases-statistics.xlsx (7 sheets, 111 cases)
 - [x] All 111 test cases tracked in test_case_tracking SQLite table
 
+### Session 49
+- [x] Sick Leave module: sick-leave.xlsx (11 tabs: 3 plan + 8 test suites, 120 cases)
+- [x] 120 test cases tracked in SQLite (total: 231)
+
 </details>
 
 ## Active Items — Phase B Generation
 
-### P1: Sick Leave Lifecycle (Next Session)
-- [ ] Read sick leave business rules reference, backend/frontend notes, exploration findings
-- [ ] Generate test-plan-sick-leave.xlsx (3 sheets)
-- [ ] Generate test-cases-sick-leave.xlsx (lifecycle CRUD, dual status, accounting, files, notifications, validation, permissions)
+### P1: Day-Off Lifecycle (Next Session)
+- [ ] Read day-off business rules reference, backend/frontend notes, exploration findings
+- [ ] Generate day-off.xlsx (unified workbook: plan + TS-* tabs)
+- [ ] Coverage: request lifecycle, 4 calendar conflict paths, ledger mechanics, approval, search types, permissions
 - [ ] Track cases in SQLite, update vault
 
-### P1: Day-Off Lifecycle (Sessions 50-51)
-- [ ] Generate test-plan-day-off.xlsx
-- [ ] Generate test-cases-day-off.xlsx (request lifecycle, 4 calendar conflict paths, ledger mechanics, approval)
-
-### P2: Security/Permissions (Sessions 52-53)
+### P2: Security/Permissions (Sessions 51-52)
 - [ ] Generate cross-cutting security test plan + cases (permission matrix, auth, API token gaps)
 
-### P2: Accounting Supplements (Sessions 53-54)
+### P2: Accounting Supplements (Sessions 52-53)
 - [ ] Generate supplement test cases for gaps not in Qase (period edge cases, payment errors, notification triggers)
 
 ### P3: Vacations Supplements

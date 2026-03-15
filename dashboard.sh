@@ -7,7 +7,7 @@ DASHBOARD="expert-system/logs/dashboard.html"
 python3 expert-system/scripts/generate-dashboard.py 2>/dev/null || true
 
 if [[ -f "$DASHBOARD" ]]; then
-    chromium-browser "$DASHBOARD" >/dev/null 2>&1 &
+    xdg-open "$(realpath "$DASHBOARD")" >/dev/null 2>&1 &
     echo "Dashboard opened in Chromium"
 else
     echo "No dashboard found. Run at least one session first."

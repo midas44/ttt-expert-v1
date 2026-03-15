@@ -200,3 +200,4 @@
 
 ## Phase B — Generated Test Documentation
 - **Statistics Module** (Session 48): `test-plan-statistics.xlsx` (3 sheets) + `test-cases-statistics.xlsx` (7 sheets, 111 cases)
+- **Sick Leave Module** (Session 49): `sick-leave.xlsx` (11 tabs: Plan Overview + Feature Matrix + Risk Assessment + 8 TS-* suites, 120 cases)
