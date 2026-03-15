@@ -14,3 +14,9 @@ expert-system/vault/.git
 .claude/context/secrets/
 .claude/context/gitlab-credentials.md
 config/ttt/envs/qa-1.yml
+
+# Playwright MCP logs
+.playwright-mcp/
+
+# Exploration artefacts (screenshots, etc.)
+expert-system/artefacts/

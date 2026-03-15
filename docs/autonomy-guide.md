@@ -70,14 +70,14 @@ grep noveogroup /etc/hosts
 
 ### 2.2 Review config.yaml
 
-The `autonomy` section in `expert-system/config.yaml`:
+The `autonomy` section in `expert-system/config.yaml` (showing defaults — adjust to your needs):
 
 ```yaml
 autonomy:
   mode: "full"                       # "hybrid" or "full"
   max_sessions: 30                   # Stop after N sessions (0 = unlimited)
   consecutive_failure_limit: 3       # Abort after N consecutive failures
-  auto_phase_transition: false       # Auto-switch to Phase B when coverage target met
+  auto_phase_transition: true        # Auto-switch to Phase B when coverage target met
   log_dir: "expert-system/logs"      # Session log directory
   stop: false                        # Set to true to gracefully stop after current session
   model: "opus"                      # Model for claude -p
@@ -91,7 +91,7 @@ autonomy:
 |---------|---------|------------------------|
 | `max_sessions` | 30 | You want fewer/more sessions total |
 | `allow_api_mutations` | false | You trust autonomous POST/PATCH/DELETE on test envs |
-| `auto_phase_transition` | false | You want Phase B to start automatically when coverage is met |
+| `auto_phase_transition` | true | Set to false if you want manual Phase B transition |
 | `model` | opus | You want to use a different model |
 | `session.delay_minutes` | 70 | See §2.3 for tuning guidance |
 | `session.delay_minutes_offhours` | 45 | Off-hours delay; see §2.3 |
@@ -518,7 +518,7 @@ Set `max_sessions: 0` for unlimited sessions (will run until another condition t
 - **No API mutations** — POST, PUT, PATCH, DELETE are blocked unless `allow_api_mutations: true`
 - **No database writes** — only SELECT queries
 - **No production access** — testing environments only (enforced by MCP server config)
-- **No Phase B auto-start** — must be enabled via `auto_phase_transition: true` or manually
+- **Phase B auto-start** — enabled by default (`auto_phase_transition: true`). Set to `false` to require manual transition
 
 ### Permission mode
 
@@ -574,12 +574,43 @@ Common causes:
 - **QMD daemon not running**: runner auto-starts it, but check `pgrep -f "qmd.*mcp"`
 - **MCP server crashed**: `claude mcp list` to check, restart as needed
 
+### Proxy / VPN drops causing timeouts
+
+Claude Code requires `HTTP_PROXY=http://127.0.0.1:2080` (AdGuard VPN in SOCKS mode). If the VPN drops mid-session, the `claude -p` process hangs on API calls until the 270-min timeout kills it.
+
+**Prevention:** A cron-based watchdog checks the proxy every 3 minutes and restarts the VPN if it's down:
+
+```bash
+# Add to crontab (crontab -e):
+*/3 * * * * /home/v/Dev/ttt-expert-v1/expert-system/scripts/proxy-watchdog.sh >> /home/v/Dev/ttt-expert-v1/expert-system/logs/proxy-watchdog.log 2>&1
+```
+
+The watchdog script (`expert-system/scripts/proxy-watchdog.sh`) tests connectivity through the proxy and runs `adguardvpn-cli disconnect && adguardvpn-cli connect -l FI` on failure. Logs only appear when a restart was needed.
+
+**Diagnosis:** If you see a session timeout in `runner-state.json`, check if the proxy was down at that time:
+
+```bash
+# Timed-out sessions
+python3 -c "
+import json
+with open('expert-system/logs/runner-state.json') as f:
+    s = json.load(f)
+for sess in s['sessions']:
+    if sess['exit_code'] == 124:
+        print(f'Session {sess[\"session\"]}: TIMED OUT at {sess[\"timestamp\"]}')
+"
+
+# Proxy restart events around that time
+grep "Proxy" expert-system/logs/proxy-watchdog.log
+```
+
 ### Sessions timing out
 
 If sessions consistently hit the timeout (exit code 124), check:
 - `max_duration_minutes` in config.yaml — increase if sessions legitimately need more time
 - The stderr file for hung MCP calls or infinite loops
 - Whether an MCP server is unresponsive (e.g., VPN disconnected)
+- Whether the proxy was down (see "Proxy / VPN drops" above)
 
 ```bash
 # Find timed-out sessions
@@ -712,6 +743,8 @@ git -C expert-system/vault log --oneline --stat
 | `expert-system/config.yaml` | All configuration including autonomy settings |
 | `expert-system/scripts/run-sessions.sh` | The runner script |
 | `expert-system/scripts/coverage-report.sh` | Phase A coverage estimation dashboard |
+| `expert-system/scripts/proxy-watchdog.sh` | Cron watchdog — restarts VPN proxy if down |
+| `expert-system/logs/proxy-watchdog.log` | Proxy restart events (cron output) |
 | `expert-system/logs/runner-state.json` | Session counter, failure tracking |
 | `expert-system/logs/runner.log` | Runner's own timestamped log (auto-persisted) |
 | `expert-system/logs/session-NNN-*.json` | Per-session Claude stdout (clean JSON) |
@@ -720,4 +753,5 @@ git -C expert-system/vault log --oneline --stat
 | `expert-system/vault/_INVESTIGATION_AGENDA.md` | Prioritized investigation items |
 | `expert-system/vault/_KNOWLEDGE_COVERAGE.md` | Coverage metrics |
 | `expert-system/vault/.git` | Vault inner git repo (auto-managed, per-session commits) |
+| `expert-system/artefacts/` | UI screenshots and other exploration artefacts (gitignored) |
 | `CLAUDE+.md` | Master prompt (symlinked as `CLAUDE.md` during runner sessions) |

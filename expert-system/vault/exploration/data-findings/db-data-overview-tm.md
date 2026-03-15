@@ -7,12 +7,13 @@ tags:
   - enums
   - statistics
 created: '2026-03-12'
-updated: '2026-03-12'
+updated: '2026-03-15'
 status: active
 related:
   - '[[database-schema]]'
   - '[[vacation-service]]'
   - '[[ttt-service]]'
+  - '[[test-data-landscape-timemachine]]'
 branch: release/2.1
 ---
 # Database Data Overview (Timemachine)
@@ -73,3 +74,6 @@ REPORTED → REJECTED
 - [[database-schema]]
 - [[vacation-service]]
 - [[ttt-service]]
+
+
+**See also**: [[test-data-landscape-timemachine]] for detailed test data census, role distribution, and test data generation strategies (Phase B prep, session 28).

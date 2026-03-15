@@ -49,5 +49,5 @@ Russia (multiple cities: NSK, SPb), Serbia, Montenegro, Georgia, Armenia, France
 ## Related
 - [[database-schema]]
 - [[roles-permissions]]
-- [[accounting-workflows]]
+- [[accounting-backend]]
 - [[ttt-service]]

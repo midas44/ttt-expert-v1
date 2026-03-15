@@ -33,7 +33,7 @@ autonomy:
   mode: "full"                       # "hybrid" (human-attended) or "full" (unattended)
   max_sessions: 100                  # Stop after N sessions (0 = unlimited)
   consecutive_failure_limit: 3       # Abort after N consecutive failures
-  auto_phase_transition: false       # Auto-switch to Phase B when coverage target met
+  auto_phase_transition: true        # Auto-switch to Phase B when coverage target met
   log_dir: "expert-system/logs"      # Session log directory
   stop: false                        # Set to true to gracefully stop after current session
   model: "opus"                      # Model for claude -p

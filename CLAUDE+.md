@@ -35,12 +35,14 @@ Before ANY action at session start, read the configuration file:
 # Expert System Configuration — edit between sessions to adjust behavior
 
 session:
-  delay_minutes: 30          # Minimum delay between sessions
-  max_duration_minutes: 240  # Soft limit — begin wrap-up when approaching
+  delay_minutes: 70              # Working hours delay (3 sessions/window)
+  delay_minutes_offhours: 45     # Off-hours delay (4 sessions/window)
+  offhours_utc: "15:00-03:00"    # Non-working hours range (UTC)
+  max_duration_minutes: 240      # Soft limit — begin wrap-up when approaching
 
 phase:
   current: "knowledge_acquisition"   # "knowledge_acquisition" or "generation"
-  generation_allowed: false          # Human sets true when Phase A is complete
+  generation_allowed: false          # Set automatically when auto_phase_transition is true
 
 thresholds:
   knowledge_coverage_target: 0.8
@@ -60,11 +62,22 @@ testing_dev_envs:
 testing_prod_envs:
   primary:
     name: "stage"
+
+autonomy:
+  mode: "full"                       # "hybrid" or "full"
+  max_sessions: 100                  # Stop after N sessions (0 = unlimited)
+  consecutive_failure_limit: 3       # Abort after N consecutive failures
+  auto_phase_transition: true        # Auto-switch to Phase B when coverage target met
+  stop: false                        # Set to true to gracefully stop after current session
+  model: "opus"                      # Model for claude -p
+  effort: "max"                      # Effort level
+  allow_api_mutations: false         # If false, only GET/SELECT in autonomous mode
 ```
 
 **Rules:**
 - Read this file BEFORE any other action
-- If `phase.current` is `"knowledge_acquisition"` and `phase.generation_allowed` is `false`, do NOT generate test documentation — knowledge building only
+- If `phase.current` is `"knowledge_acquisition"`, focus on knowledge building. When coverage target is met and `auto_phase_transition` is `true`, update config.yaml to transition to Phase B automatically
+- If `phase.current` is `"generation"` and `phase.generation_allowed` is `true`, execute Phase B (test documentation generation with knowledge enrichment)
 - Check `session.delay_minutes` — if previous session briefing timestamp is less than this many minutes ago:
   - **hybrid mode**: notify human and wait for confirmation
   - **full mode**: log timing warning to session briefing and proceed (the external runner script enforces inter-session delay)
@@ -114,7 +127,12 @@ All paths are relative to the project root `/home/v/Dev/ttt-expert-v1/`.
 │   │
 │   ├── scripts/                        # Shell wrappers for analysis tools
 │   │
+│   ├── artefacts/                      # UI screenshots from Playwright exploration (gitignored)
+│   │
 │   └── output/                         # Generated XLSX test documentation
+│       ├── vacation/                   #   One subdirectory per functional area
+│       ├── sick-leave/                 #   Each contains a unified workbook
+│       └── .../                        #   (plan + test suites in one file)
 ```
 
 ---
@@ -165,7 +183,7 @@ All paths are relative to the project root `/home/v/Dev/ttt-expert-v1/`.
 │                                                              │
 │  OUTPUT                                                      │
 │  ┌──────────────────────────────────────────┐               │
-│  │  XLSX — Test Plans + Test Cases          │               │
+│  │  XLSX — Unified Test Workbooks per Area  │               │
 │  │  expert-system/output/                   │               │
 │  └──────────────────────────────────────────┘               │
 └──────────────────────────────────────────────────────────────┘
@@ -191,9 +209,9 @@ branch: <default_branch>
 
 **Wikilinks** — use `[[note-name]]` for ALL cross-references. Link any module, pattern, or concept that has (or should have) its own note. Create links to nonexistent notes as gap markers.
 
-**One concept per note.** Max ~500 words. Split if larger.
+**One concept per note.** No hard word limit — let content value drive note length. Split into separate notes when a note covers multiple distinct concepts, not based on size.
 
-**Compression** — synthesized insights only. Never paste source code. Describe findings, meaning, and connections.
+**Detail level** — include concrete details that matter for test case generation: exact field names, validation rules, error codes, boundary values, state transitions, permission requirements. Include key code snippets when they capture business logic, validation rules, API contracts, or error handling — these are more valuable than abstract descriptions. Synthesize where it adds clarity, but never compress out testable details.
 
 **Wikilink conventions:**
 - Modules: `[[module-name]]`
@@ -320,8 +338,12 @@ Track which branch you analyze. Every code-related vault note and SQLite record 
 - **PMD/Checkstyle**: if configured in pom.xml
 - **Structure**: Parse packages, class hierarchies via grep/awk
 
-### Output Compression Rule
-**Never read raw tool output exceeding ~100 lines.** Compress first via jq/awk/grep. Store compressed JSON in `analysis_runs.summary_json`. Write interpretation as vault note. Create reusable wrappers in `expert-system/scripts/`.
+### Tool Output and Vault Notes
+Two separate concerns:
+
+**Tool output compression** — for initial analysis of large tool output (>100 lines), compress via jq/awk/grep to identify key findings. Store compressed summaries in `analysis_runs.summary_json`.
+
+**Vault note detail** — when writing vault notes, include all concrete details that matter for test case generation: code snippets, validation rules, exact field names, error messages, boundary values. The vault is searched selectively via QMD, not loaded in bulk — note size is not a concern. Never compress out testable details from vault notes.
 
 ---
 
@@ -340,7 +362,7 @@ Access to live application on testing environments via Playwright (UI), Swagger/
   - If `true`: mutations are permitted on testing environments; log each mutation action and its rationale to `exploration_findings` before executing
 
 ### Playwright — UI Exploration
-Use the **`playwright-vpn`** MCP server (tools prefixed `mcp__playwright-vpn__`) for all TTT environments. The built-in Playwright plugin cannot reach VPN hosts due to proxy inheritance. Load tools via `ToolSearch: select:mcp__playwright-vpn__browser_navigate,mcp__playwright-vpn__browser_snapshot` before first use. Navigate flows, verify behavior against Figma/Confluence, screenshot evidence, note undocumented behaviors. Write to `vault/exploration/ui-flows/`.
+Use the **`playwright-vpn`** MCP server (tools prefixed `mcp__playwright-vpn__`) for all TTT environments. The built-in Playwright plugin cannot reach VPN hosts due to proxy inheritance. Load tools via `ToolSearch: select:mcp__playwright-vpn__browser_navigate,mcp__playwright-vpn__browser_snapshot` before first use. Navigate flows, verify behavior against Figma/Confluence, screenshot evidence, note undocumented behaviors. Write to `vault/exploration/ui-flows/`. Save all screenshots to the `expert-system/artefacts/` directory (e.g. `expert-system/artefacts/page-name.png`).
 
 ### Swagger/API — API Exploration
 Map endpoints to behavior, test responses and error handling. GET freely; ask permission for mutations. Write to `vault/exploration/api-findings/`.
@@ -394,7 +416,7 @@ Compress old investigations, detect stale notes, audit cross-references, clean S
 
 ## 10. Phase A — Global Knowledge Acquisition
 
-Do not rush. Phase B quality depends entirely on Phase A depth.
+Do not rush. Phase B quality depends entirely on Phase A depth. Coverage is not about how many areas have a note — it is about how much testable detail each note contains. A module with a 200-word overview note is not "covered". Include: validation rules (with code snippets), error handling paths, permission requirements per endpoint, database constraints, state transitions, boundary values, and concrete behavioral details discovered through code reading, API testing, and UI exploration.
 
 ### Orientation (Sessions 1-3)
 Map repo structure, clone and checkout, read existing docs, pull Confluence pages, check Qase for existing tests, create architecture overview and module skeletons, run initial analysis, populate module_health.
@@ -408,10 +430,12 @@ Comprehensive tool runs per module, test suite analysis, security scanning, dead
 ### Business Logic (Sessions 16-25)
 Business workflows through code AND live app, requirements correlation, undocumented logic, edge cases from exploration, inferred ADRs, GitLab history, divergences (requirements vs. code vs. behavior).
 
-### Coverage Assessment (~Session 25)
+### Coverage Assessment and Phase Transition
 Update `_KNOWLEDGE_COVERAGE.md` comprehensively, query module_health for gaps.
 - **hybrid mode**: Present coverage report to human with Phase B readiness recommendation. Human updates config.yaml to enable generation.
-- **full mode**: If `autonomy.auto_phase_transition` is `true` and coverage >= `thresholds.knowledge_coverage_target`, update `config.yaml` to set `phase.current: "generation"` and `phase.generation_allowed: true`, log the transition decision. If `auto_phase_transition` is `false`, log "Coverage target met — awaiting human decision for Phase B transition" and continue Phase A refinement of lower-coverage areas.
+- **full mode** (with `auto_phase_transition: true`): When coverage >= `thresholds.knowledge_coverage_target`, automatically update `config.yaml` to set `phase.current: "generation"` and `phase.generation_allowed: true`. Log the transition decision to `_SESSION_BRIEFING.md`. The next session will begin Phase B.
+
+**Important:** Coverage assessment must be based on **depth, not breadth**. A module is not "covered" until its vault notes contain concrete testable details — validation rules with code snippets, error paths, permission requirements per endpoint, boundary values, and state transitions. A 200-word overview note does not count toward coverage.
 
 ---
 
@@ -421,36 +445,93 @@ Only when config.yaml has `phase.current: "generation"` and `phase.generation_al
 
 ### XLSX Format
 
-Generate with Python openpyxl. Output to `expert-system/output/`.
+Generate with Python openpyxl. Output to `expert-system/output/<area>/`.
 
-**Test Plan** (`test-plan-<module>.xlsx`):
-- Sheet "Overview": scope, objectives, approach, environment requirements
-- Sheet "Feature Matrix": features × test types, coverage status
-- Sheet "Risk Assessment": feature, risk, likelihood, impact, mitigation
+Each functional area produces **one unified XLSX workbook** containing both the test plan and all test suites. This enables single-file import into Google Sheets with multi-tab navigation.
 
-**Test Cases** (`test-cases-<module>.xlsx`):
-- One sheet per feature area
-- Columns: Test ID (TC-MODULE-NNN), Title, Preconditions, Steps, Expected Result, Priority, Type, Requirement Ref, Module/Component, Notes
-- Professional formatting: Arial font, headers with filters, column widths set, alternating row colors
+**Directory structure:**
+```
+expert-system/output/
+├── vacation/
+│   └── vacation.xlsx
+├── sick-leave/
+│   └── sick-leave.xlsx
+├── reports/
+│   └── reports.xlsx
+├── calendar-dayoff/
+│   └── calendar-dayoff.xlsx
+├── accounting/
+│   └── accounting.xlsx
+├── admin/
+│   └── admin.xlsx
+├── statistics/
+│   └── statistics.xlsx
+└── planner/
+    └── planner.xlsx
+```
+
+**Workbook tab structure** (`<area>.xlsx`):
+
+| Tab | Purpose |
+|-----|---------|
+| **Plan Overview** | Scope, objectives, approach, environment requirements, links to all TS- tabs |
+| **Feature Matrix** | Features × test types grid with coverage counts. Each feature cell hyperlinks to its TS- tab |
+| **Risk Assessment** | Feature, risk, likelihood, impact, severity, mitigation/test focus |
+| **TS-\<Suite1\>** | Test cases for first test suite (e.g., TS-Vacation-CRUD) |
+| **TS-\<Suite2\>** | Test cases for second test suite (e.g., TS-Vacation-Approval) |
+| ... | One TS- tab per test suite within the functional area |
+
+**Test suite naming:** `TS-<Area>-<Focus>` — e.g., `TS-Vacation-CRUD`, `TS-Vacation-Approval`, `TS-SickLeave-Lifecycle`, `TS-Reports-API`. Choose suites that group logically related test cases (typically 10-30 cases per suite).
+
+**Test case columns** (all TS- tabs):
+- Test ID (TC-AREA-NNN), Title, Preconditions, Steps, Expected Result, Priority, Type, Requirement Ref, Module/Component, Notes
+
+**Cross-navigation hyperlinks:**
+- Plan Overview: hyperlink list to every TS- tab (`=HYPERLINK("#'TS-Vacation-CRUD'!A1", "Vacation CRUD — 25 cases")`)
+- Feature Matrix: each feature row hyperlinks to its corresponding TS- tab
+- Each TS- tab row 1: back-link to Plan Overview (`=HYPERLINK("#'Plan Overview'!A1", "← Back to Plan")`)
+
+**Formatting:**
+- Arial font, headers with auto-filters, column widths set, alternating row colors
+- Hyperlinks styled as blue underlined text
+- Tab colors: green for plan tabs, blue for TS- tabs
+
+### Generation Order
+
+Generate documentation in priority order defined in `MISSION_DIRECTIVE.md` § Priority Areas:
+
+1. **Absences** — vacation, sick-leave, calendar/day-off (highest business criticality)
+2. **Reports** — time reporting, confirmation flow, statistics
+3. **Accounting** — period management, payments, vacation day corrections
+4. **Administration** — projects, employees, parameters, calendars
+
+Within each priority group, generate the most complex/bug-prone area first (e.g., vacation before day-off, since vacation has more bugs and approval workflows).
 
 ### Generation Workflow
 
-Per module/feature:
+Per functional area (in priority order above):
 1. Focused knowledge check via QMD + vault notes + SQLite
-2. Identify gaps — if insufficient, investigate first
+2. Identify gaps — if insufficient, investigate deeper first (see Knowledge Updates below)
 3. Check Qase for existing coverage — never duplicate
-4. Generate test plan XLSX
-5. Generate test cases XLSX
-6. Track each case in `test_case_tracking` table
-7. Update vault notes linking outputs to knowledge base
+4. Define test suites (logical groupings of 10-30 cases)
+5. Generate the unified XLSX workbook with plan tabs + all TS- tabs + hyperlinks
+6. Create output subdirectory (`expert-system/output/<area>/`)
+7. Track each case in `test_case_tracking` table
+8. Update vault notes linking outputs to knowledge base
 
 ### Knowledge Updates During Generation
 
-When knowledge is insufficient for thorough test cases:
-- Pause generation for that area
-- Investigate (code, external sources, live app)
-- Update vault and SQLite
-- Resume with improved knowledge
+Phase B is not just generation — it requires **deeper, more specific investigation** than Phase A. Phase A built breadth; Phase B needs depth. The context window is 1M tokens and vault notes have no hard size limit.
+
+**Enriching the knowledge base is a primary Phase B activity, not a secondary one.** Existing Phase A notes were written under aggressive compression rules and lack the concrete detail needed for test case generation. Before generating test cases for any module:
+
+1. **Re-investigate the module in depth** — read the actual code paths (validation logic, error handling, state machines, permission checks), trace edge cases through the codebase, verify behavior on the live app, check boundary conditions in the database
+2. **Rewrite or substantially expand existing vault notes** — replace abstract summaries with concrete details: exact field names, validation rules with code snippets, error codes and messages, API request/response examples, database constraints, permission matrices, state transition diagrams
+3. **Create new notes** for feature-specific findings (e.g., form validation rules, API error responses, edge case behaviors) that weren't captured in Phase A's broader sweep
+4. **Only generate test cases** after the knowledge base for that module has been enriched to the point where every test case can reference specific, concrete details — not abstract descriptions
+5. **Pause generation** if knowledge is insufficient — investigate first, update vault and SQLite, then resume with improved knowledge
+
+The knowledge base should grow substantially during Phase B. A module note that was 300 words in Phase A should become 1500-3000 words after Phase B enrichment, with code snippets, validation rules, boundary values, and concrete behavioral details.
 
 ---
 
@@ -501,7 +582,7 @@ The GitLab MCP server (`@modelcontextprotocol/server-gitlab`) is registered but 
 
 **Test documentation**: Traceable to knowledge base and requirements. No Qase duplication. Adequate detail for tester execution.
 
-**Token efficiency**: QMD before full reads, shell compression, specific file reads, notes under 500 words, targeted MCP queries.
+**Token efficiency**: QMD before full reads, shell compression, specific file reads, targeted MCP queries. Note size is not a token concern — the vault is searched via QMD and read selectively, not loaded entirely.
 
 ---
 

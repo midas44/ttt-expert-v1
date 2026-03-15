@@ -199,12 +199,14 @@ print(state['$1'])
 }
 
 update_state() {
-    # update_state <session_num> <exit_code> <duration_sec> <log_file>
+    # update_state <session_num> <exit_code> <duration_sec> <log_file> <phase>
     python3 -c "
-import json, datetime
+import json, datetime, os
+
 with open('$STATE_FILE') as f:
     state = json.load(f)
 
+phase = '$5'
 state['session_number'] = $1
 
 if $2 != 0:
@@ -212,13 +214,38 @@ if $2 != 0:
 else:
     state['consecutive_failures'] = 0
 
-state['sessions'].append({
+# Parse session JSON for enriched stats
+session_data = {
     'session': $1,
+    'phase': phase,
     'timestamp': datetime.datetime.now().isoformat(),
     'exit_code': $2,
     'duration_sec': $3,
     'log_file': '$4'
-})
+}
+
+log_file = '$4'
+if os.path.exists(log_file) and os.path.getsize(log_file) > 0:
+    try:
+        with open(log_file) as lf:
+            js = json.load(lf)
+        session_data['num_turns'] = js.get('num_turns', 0)
+        session_data['cost_usd'] = js.get('total_cost_usd', 0)
+        session_data['result_summary'] = (js.get('result', '') or '')[:500]
+        mu = js.get('modelUsage', {})
+        session_data['models'] = {}
+        for model, usage in mu.items():
+            session_data['models'][model] = {
+                'input': usage.get('inputTokens', 0),
+                'output': usage.get('outputTokens', 0),
+                'cache_read': usage.get('cacheReadInputTokens', 0),
+                'cache_create': usage.get('cacheCreationInputTokens', 0),
+                'cost': usage.get('costUSD', 0)
+            }
+    except:
+        pass
+
+state['sessions'].append(session_data)
 
 with open('$STATE_FILE', 'w') as f:
     json.dump(state, f, indent=2)
@@ -361,7 +388,23 @@ main() {
     local session_num
     session_num=$(( $(get_state_field "session_number") + 1 ))
 
+    # Count sessions per phase
+    local phase_a_count phase_b_count
+    phase_a_count=$(python3 -c "
+import json
+with open('$STATE_FILE') as f:
+    s = json.load(f)
+print(sum(1 for x in s['sessions'] if x.get('phase') == 'knowledge_acquisition'))
+" 2>/dev/null || echo 0)
+    phase_b_count=$(python3 -c "
+import json
+with open('$STATE_FILE') as f:
+    s = json.load(f)
+print(sum(1 for x in s['sessions'] if x.get('phase') == 'generation'))
+" 2>/dev/null || echo 0)
+
     log "Starting from session $session_num (max: $MAX_SESSIONS)"
+    log "Phase A sessions: $phase_a_count, Phase B sessions: $phase_b_count"
     log "Model: $MODEL, effort: $EFFORT"
     log "Phase: $PHASE"
     log "Log dir: $LOG_DIR"
@@ -420,8 +463,9 @@ main() {
             log "Session $session_num TIMED OUT after $((timeout_seconds / 60)) minutes"
         fi
 
-        update_state "$session_num" "$exit_code" "$duration" "$log_file"
+        update_state "$session_num" "$exit_code" "$duration" "$log_file" "$PHASE"
         commit_vault "$session_num" "$exit_code" "$duration"
+        python3 "$PROJECT_ROOT/expert-system/scripts/generate-dashboard.py" 2>/dev/null || true
 
         if [[ "$exit_code" -eq 0 ]]; then
             log "Session $session_num completed (${duration}s)"

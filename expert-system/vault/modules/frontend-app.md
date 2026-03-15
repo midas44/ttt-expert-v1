@@ -5,8 +5,8 @@ tags:
   - react
   - typescript
 created: '2026-03-12'
-updated: '2026-03-12'
-status: draft
+updated: '2026-03-13'
+status: active
 related:
   - '[[system-overview]]'
 branch: release/2.1
@@ -57,4 +57,4 @@ React SPA with 12 feature modules, served via Spring Boot wrapper.
 ## Related
 - [[system-overview]]
 - [[frontend-architecture]]
-- [[frontend-state-management]]
+- [[frontend-architecture]]
