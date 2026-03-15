@@ -9,58 +9,58 @@ status: active
 ---
 # Session Briefing
 
-## Current Session: 50
-**Timestamp**: 2026-03-15T12:00:00Z
+## Current Session: 52
+**Timestamp**: 2026-03-15T15:30:00Z
 **Phase**: generation (Phase B)
 **Mode**: full (unattended)
 
-## Session 50 Summary
+## Session 52 Summary
 
-Generated Day-Off module test plan and test cases (115 cases) — third Phase B module.
+Generated Accounting supplements test plan and test cases (82 cases) — fifth Phase B module.
 
-### 1. Day-Off Module — Generated
+### 1. Accounting Supplements — Generated
 
-**day-off.xlsx** (11 tabs, unified workbook):
+**accounting.xlsx** (11 tabs, unified workbook):
 
 **Plan tabs (3):**
-- Plan Overview: scope, objectives, approach, test data strategy, environment requirements, Qase gap analysis
-- Feature Matrix: 8 feature areas × 7 test types, 115 total cases
-- Risk Assessment: 13 risks (3 Critical, 4 High, 4 Medium, 2 Low)
+- Plan Overview: scope, objectives, approach, gap analysis vs 127 existing Qase cases, test data strategy, 11 known bugs referenced
+- Feature Matrix: 8 feature areas × 7 test types, 82 total cases
+- Risk Assessment: 13 risks (2 Critical, 5 High, 5 Medium, 1 Low)
 
-**Test suite tabs (8, 115 cases):**
+**Test suite tabs (8, 82 cases):**
 | Sheet | Cases | Priority C/H/M/L |
 |-------|-------|-------------------|
-| TS-DO-Lifecycle | 20 | 1/9/7/3 |
-| TS-DO-Ledger | 14 | 1/6/5/2 |
-| TS-DO-CalConflict | 16 | 2/8/5/1 |
-| TS-DO-Validation | 15 | 0/7/6/2 |
-| TS-DO-Permissions | 13 | 0/7/5/1 |
-| TS-DO-Search | 12 | 0/5/6/1 |
-| TS-DO-ManagerUI | 12 | 0/5/5/2 |
-| TS-DO-EmployeeUI | 13 | 0/5/7/1 |
+| TS-ACC-PeriodEdge | 14 | 2/5/5/0 |
+| TS-ACC-PeriodEffects | 11 | 2/5/4/0 |
+| TS-ACC-PayValidation | 13 | 1/3/7/1 |
+| TS-ACC-PayLifecycle | 10 | 2/3/3/1 |
+| TS-ACC-DayCorrect | 10 | 3/1/5/1 |
+| TS-ACC-Notifications | 8 | 0/3/5/0 |
+| TS-ACC-SickLeaveAcct | 7 | 0/2/4/1 |
+| TS-ACC-APIErrors | 9 | 0/3/6/0 |
 
-Key coverage areas:
-- Full request lifecycle: create/approve/reject/delete/edit with all status transitions
-- Two-table architecture: employee_dayoff_request + employee_dayoff ledger (credit/debit)
-- 4 calendar conflict resolution paths (A: move, B: DELETED_FROM_CALENDAR, C: system reject, D: office change)
-- Ledger mechanics: credit/debit balance, transfer modal, reason tracking
-- 15 known bugs (BUG-DO-1 through BUG-DO-15) across API, UI, data integrity, localization
-- 8 search types: status, date range, employee, office, reason, calendar, text, combined
-- Permission model: employee vs manager vs admin roles, approval matrix
-- Dual UI views: employee (My Day-Offs) and manager (5 sub-tabs)
+Key gap coverage:
+- 4 period management bugs: missing first-day validation (BUG-PERIOD-1), NPE on null start (BUG-PERIOD-2), stack trace leakage (BUG-PERIOD-3), permission inconsistency (BUG-PERIOD-4)
+- 6 payment bugs: 2-hour orphan window (BUG-PAY-1), type misalignment (BUG-PAY-2), reversed dates (BUG-PAY-3), DB/API inconsistency (BUG-PAY-4), negative newDays (BUG-PAY-5), stack trace leakage (BUG-PAY-6)
+- Cross-service effects: PeriodChangedEvent → auto-reject + vacation recalc via RabbitMQ
+- Payment lifecycle: partial payment day return logic, FIFO, nextYear cap, auto-payment cron
+- Day correction: negative balances, maternity, FIFO redistribution, bulk recalc
+- Notifications: manager notify, auto-reject emails, forgotten reports, budget banners
+- Sick leave accounting: dual status workflow, terminal states, concurrent changes
+- API errors: auth gaps, information disclosure, pagination/error inconsistency
 
 ### 2. SQLite Updates
-- 115 rows added to test_case_tracking (total: 346)
-- 1 analysis_run logged (session-50, id 135)
+- 82 rows added to test_case_tracking (total: 520)
+- 1 analysis_run logged (session-52)
 
 ## Current State
-- Vault notes: 159 (unchanged — no new knowledge notes needed)
-- Analysis runs: 135
+- Vault notes: 159 (unchanged — existing notes sufficient for generation)
+- Analysis runs: 137
 - Design issues: 121
 - Exploration findings: 173
 - External refs: 65
 - Module health: 25 modules tracked
-- Test case tracking: 346 (111 statistics + 120 sick leave + 115 day-off)
+- Test case tracking: 520 (111 statistics + 120 sick leave + 115 day-off + 92 security + 82 accounting)
 
 ## Phase B Progress
 
@@ -69,13 +69,13 @@ Key coverage areas:
 | Statistics | #1 | 0 | 111 | DONE |
 | Sick Leave lifecycle | #2 | 57 (display only) | 120 | DONE |
 | Day-Off lifecycle | #3 | 19 (display only) | 115 | DONE |
-| Security/Permissions | #4 | 0 | 0 | Next |
-| Accounting supplements | #5 | 127 | 0 | Pending |
-| Vacations supplements | #6 | 200+ | 0 | Pending |
+| Security/Permissions | #4 | 0 | 92 | DONE |
+| Accounting supplements | #5 | 127 | 82 | DONE |
+| Vacations supplements | #6 | 200+ | 0 | Next |
 | Reports supplements | #7 | existing | 0 | Pending |
 | Admin supplements | #8 | 115 | 0 | Pending |
 
 ## Next Session Plan
-1. Generate Security/Permissions cross-cutting test plan + test cases (priority #4)
-2. Coverage: role-permission access matrix (85+ endpoints), auth mechanisms (JWT+API token+CAS), 5 known security gaps, API token 403 bugs, route-level permission enforcement
-3. 0 security-focused test cases in Qase — full generation needed
+1. Generate Vacations supplements test plan + test cases (priority #6)
+2. Coverage: 200+ existing Qase cases — supplement gaps only
+3. Focus: API edge cases (12 bugs from vacation-crud-api-testing), business rule boundaries (advance vacation, accrued-only, FIFO), approval workflow edge cases (multi-approver, self-approval, cross-period), day calculation edge cases (maternity, negative, cross-year), form validation gaps

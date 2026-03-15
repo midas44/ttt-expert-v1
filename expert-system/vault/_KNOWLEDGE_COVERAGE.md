@@ -9,9 +9,9 @@ status: active
 ---
 # Knowledge Coverage
 
-**Overall Coverage: 100%** (Session 50 — Phase B active)
+**Overall Coverage: 100%** (Session 52 — Phase B active)
 
-**Phase B Generation Progress: 3/8 modules complete (Statistics, Sick Leave, Day-Off)**
+**Phase B Generation Progress: 5/8 modules complete (Statistics, Sick Leave, Day-Off, Security, Accounting)**
 
 ## Coverage by Area
 
@@ -25,7 +25,7 @@ status: active
 - [x] Frontend structural quality analysis
 - [x] Backend + frontend test suites analyzed
 - [x] WebSocket, RabbitMQ, feature toggles
-- [x] Error handling agreement (backend↔frontend)
+- [x] Error handling agreement (backend-frontend)
 - [x] CompanyStaff integration: sync flow, 9 post-processors, 7 bugs
 - [x] Deployment architecture: 7 services, Docker Compose, GitLab CI/CD
 - [x] Role-permission access matrix: 85+ endpoints, 5 security gaps
@@ -53,9 +53,17 @@ status: active
 - [x] Form validation rules — imperative frontend + custom backend validators, UI vs API weekend gap
 - [x] **TEST PLAN + TEST CASES GENERATED** (115 cases, 8 suites, unified workbook)
 
-### Accounting (100%) — Phase B READY
+### Security/Permissions (100%) — **PHASE B COMPLETE**
+- [x] 3 auth mechanisms: JWT, API token, CAS SSO
+- [x] 11 global roles, 21 ApiPermission enum values, role-permission access matrix
+- [x] 3 authorization patterns (A/B/C), 21 known security design issues
+- [x] Self-approval gaps (vacation, reports, day-off), information disclosure, object-level permissions
+- [x] **TEST PLAN + TEST CASES GENERATED** (92 cases, 8 suites, unified workbook)
+
+### Accounting (100%) — **PHASE B COMPLETE**
 - [x] Period management, payment flow, vacation day correction, production calendars
 - [x] Form validation rules — period (1 field), payment (@Range 0-366, sum constraint), day correction (BigDecimal + comment 255), budget notification (7 fields, 2 class-level validators), statistics search
+- [x] **TEST PLAN + TEST CASES GENERATED** (82 supplement cases, 8 suites, 127 Qase existing)
 
 ### Admin Panel (100%) — Phase B READY
 - [x] Projects, Employees, Parameters, Calendars, API, Export, Account
@@ -94,21 +102,21 @@ status: active
 - [x] Test data landscape, Qase granular mapping, test data generation strategies, generation priority order
 - [x] Form validation rules complete for ALL modules
 
-## Session 50 Statistics
+## Session 52 Statistics
 - Vault notes: 159
-- Analysis runs: 135
+- Analysis runs: 137
 - Design issues: 121
 - Exploration findings: 173
 - External refs: 65
 - Module health: 25 modules, avg debt score 5.18
-- Test case tracking: 346 (111 Statistics + 120 Sick Leave + 115 Day-Off)
+- Test case tracking: 520 (111 Statistics + 120 Sick Leave + 115 Day-Off + 92 Security + 82 Accounting)
 
 ## Phase B Generation Priority Order
 1. **Statistics** — 111 cases generated, 0 Qase existing — **COMPLETE**
 2. **Sick Leave lifecycle** — 120 cases generated, 57 Qase display/notification — **COMPLETE**
 3. **Day-Off lifecycle** — 115 cases generated, 19 Qase display — **COMPLETE**
-4. **Security/Permissions** — 0 existing coverage — NEXT
-5. **Accounting supplements** — 127 existing cases, fill gaps
-6. **Vacations supplements** — 200+ existing cases
+4. **Security/Permissions** — 92 cases generated, 0 existing — **COMPLETE**
+5. **Accounting supplements** — 82 cases generated, 127 existing Qase — **COMPLETE**
+6. **Vacations supplements** — 200+ existing cases — NEXT
 7. **Reports supplements** — existing coverage
 8. **Admin supplements** — 115 existing cases

@@ -15,7 +15,7 @@ status: active
 - P2: Medium — within next 5 sessions
 - P3: Low — backlog
 
-## Completed (Sessions 1-50)
+## Completed (Sessions 1-52)
 <details>
 <summary>Sessions 1-9 completed items (click to expand)</summary>
 
@@ -118,7 +118,7 @@ status: active
 </details>
 
 <details>
-<summary>Sessions 30-50 completed items (click to expand)</summary>
+<summary>Sessions 30-52 completed items (click to expand)</summary>
 
 ### Session 30
 - [x] Maintenance §9.4: Vault audit (154 notes, all indexed), SQLite cleanup (severity normalization, finding_type 37→13)
@@ -160,24 +160,27 @@ status: active
 - [x] Day-Off module: day-off.xlsx (11 tabs: 3 plan + 8 test suites, 115 cases)
 - [x] 115 test cases tracked in SQLite (total: 346)
 
+### Session 51
+- [x] Security/Permissions: security.xlsx (11 tabs: 3 plan + 8 test suites, 92 cases)
+- [x] 92 test cases tracked in SQLite (total: 438)
+
+### Session 52
+- [x] Accounting supplements: accounting.xlsx (11 tabs: 3 plan + 8 test suites, 82 cases)
+- [x] 82 test cases tracked in SQLite (total: 520)
+
 </details>
 
 ## Active Items — Phase B Generation
 
-### P1: Security/Permissions (Next Session)
-- [ ] Read role-permission access matrix, auth patterns, 5 known security gaps
-- [ ] Generate security.xlsx (unified workbook: plan + TS-* tabs)
-- [ ] Coverage: JWT+API token auth, CAS SSO, @PreAuthorize patterns, route-level permissions, API token 403 bugs
+### P1: Vacations Supplements (Next Session)
+- [ ] Read Qase vacation suites (200+ cases) — identify gaps
+- [ ] Generate vacations-supplements.xlsx covering gaps not in Qase
+- [ ] Focus: API edge cases (12 bugs), business rule boundaries, approval workflow edge cases, day calculation, form validation
 - [ ] Track cases in SQLite, update vault
 
-### P2: Accounting Supplements (Sessions 52-53)
-- [ ] Generate supplement test cases for gaps not in Qase (period edge cases, payment errors, notification triggers)
-
-### P3: Vacations Supplements
-- [ ] API/edge/business rule cases complementing 200+ existing Qase cases
-
-### P3: Reports Supplements
-- [ ] Confirmation edge cases, period advance/revert, auto-reject
+### P2: Reports Supplements (Sessions 54-55)
+- [ ] Generate supplement test cases for gaps not in Qase
+- [ ] Focus: confirmation edge cases, auto-reject, period advance effects on reports
 
 ### P3: Admin Supplements
 - [ ] PM Tool sync, close-by-tag permissions, tracker integration

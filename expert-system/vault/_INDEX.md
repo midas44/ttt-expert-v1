@@ -54,7 +54,7 @@
 - [[patterns/frontend-cross-module-patterns]] — Shared notifications, effort calc, persistence
 - [[patterns/feature-toggles-unleash]] — 6 toggles, all infrastructure, env-qualified naming
 - [[patterns/email-notification-triggers]] — ~35 templates, scheduled + event-driven, actor variants
-- [[patterns/error-handling-agreement]] — Backend↔Frontend: 4 error categories, localized errorCode
+- [[patterns/error-handling-agreement]] — Backend-Frontend: 4 error categories, localized errorCode
 
 ## Investigations
 - [[investigations/vacation-approval-workflow-e2e]] — Two-tier approval model, bug verification
@@ -69,13 +69,13 @@
 - [[investigations/employee-reports-row-expansion]] — Chevron-only click, stale cache bug, spec deviation
 - [[investigations/sick-leave-number-validation]] — Backend vs frontend aligned: optional, max 40 chars, whitespace trim
 - [[investigations/tracker-integration-deep-dive]] — 8 tracker types, GraalVM sandbox, 222K work logs, low adoption
-- [[investigations/rabbitmq-statistic-report-sync]] — Complete PATH 3: vacation/sick-leave → MQ → statistic_report, race condition
+- [[investigations/rabbitmq-statistic-report-sync]] — Complete PATH 3: vacation/sick-leave - MQ - statistic_report, race condition
 - [[investigations/database-performance-analysis]] — PostgreSQL performance: 2.6GB DB, 7 issues, 526MB unused indexes
 
 ## Analysis (Phase B Preparation)
 - [[analysis/absence-data-model]] — Vacation, sick leave, day-off data models
 - [[analysis/office-period-model]] — REPORT/APPROVE dual periods
-- [[analysis/phase-b-readiness-assessment]] — Phase B readiness: 99.5% → 100% coverage
+- [[analysis/phase-b-readiness-assessment]] — Phase B readiness: 99.5% - 100% coverage
 - [[analysis/role-permission-matrix]] — 85+ endpoints, 26 routes, 12 permission classes, 5 security gaps
 - [[analysis/vacation-business-rules-reference]] — 10 sections, 45+ rules, 12 known bugs
 - [[analysis/reports-business-rules-reference]] — 10 sections, 14 bugs, reports/confirmation/periods/statistics
@@ -110,7 +110,7 @@
 - [[exploration/ui-flows/sick-leave-accounting-workflow]] — Dual status system, any-to-any transitions, 3 views compared
 - [[exploration/ui-flows/confirmation-flow-live-testing]] — Full approve/reject UI testing, N+1 API, JS error
 - [[exploration/ui-flows/figma-tooltip-verification]] — 5 tooltip types verified against Figma specs
-- [[exploration/ui-flows/file-upload-sick-leave-flow]] — Full create→attach→view→delete cycle, 3 security findings
+- [[exploration/ui-flows/file-upload-sick-leave-flow]] — Full create-attach-view-delete cycle, 3 security findings
 - [[exploration/ui-flows/notification-page-budget-monitoring]] — Budget monitoring: create/delete, md/% limits, 5 roles
 - [[exploration/ui-flows/production-calendar-management]] — Admin calendar: 2 tabs, 10 calendars, 27 SOs, event CRUD
 - [[exploration/ui-flows/budget-norm-tooltip-verification]] — Conditional 3/4-number tooltip format verified, no bugs
@@ -146,7 +146,7 @@
 - [[exploration/data-findings/dayoff-rescheduling-data-patterns]] — Status distribution, DELETED_FROM_CALENDAR
 - [[exploration/data-findings/dayoff-calendar-conflict-analysis]] — Mass conflict events, 7 edge cases, 10 test scenarios
 - [[exploration/data-findings/email-template-field-mapping]] — 120 templates: per-template Mustache variable mapping
-- [[exploration/data-findings/dayoff-calendar-conflict-live-test]] — Live create→delete: Path A orphaned, Path B silent deletion
+- [[exploration/data-findings/dayoff-calendar-conflict-live-test]] — Live create-delete: Path A orphaned, Path B silent deletion
 - [[exploration/data-findings/legacy-vs-new-email-templates]] — 50 legacy dead DB artifacts, 70 NOTIFY_* active
 - [[exploration/data-findings/test-data-landscape-timemachine]] — Phase B prep: employees, roles, offices, data volumes, test data strategies
 
@@ -202,3 +202,5 @@
 - **Statistics Module** (Session 48): `test-plan-statistics.xlsx` (3 sheets) + `test-cases-statistics.xlsx` (7 sheets, 111 cases)
 - **Sick Leave Module** (Session 49): `sick-leave.xlsx` (11 tabs: Plan Overview + Feature Matrix + Risk Assessment + 8 TS-* suites, 120 cases)
 - **Day-Off Module** (Session 50): `day-off.xlsx` (11 tabs: Plan Overview + Feature Matrix + Risk Assessment + 8 TS-* suites, 115 cases)
+- **Security Module** (Session 51): `security.xlsx` (11 tabs: Plan Overview + Feature Matrix + Risk Assessment + 8 TS-* suites, 92 cases)
+- **Accounting Module** (Session 52): `accounting.xlsx` (11 tabs: Plan Overview + Feature Matrix + Risk Assessment + 8 TS-* suites, 82 supplement cases)
