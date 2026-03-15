@@ -1,911 +1,1634 @@
 #!/usr/bin/env python3
-"""Generate unified accounting.xlsx workbook — supplements to existing Qase 127 cases."""
+"""Generate accounting.xlsx — unified test workbook for Accounting module.
+
+Phase B output for the TTT Expert System (Session 61 — regenerated with enriched knowledge).
+Covers: Period management, vacation payment, day correction, accounting views/notifications,
+        sick leave accounting, API errors & security.
+
+Knowledge sources:
+  - modules/accounting-service-deep-dive.md (13 design issues, full code analysis)
+  - analysis/accounting-form-validation-rules.md (field-level validation)
+  - exploration/api-findings/payment-flow-live-testing.md (6 bugs)
+  - exploration/api-findings/vacation-day-correction-live-testing.md (drift bug)
+  - exploration/ui-flows/accounting-pages.md (5 sub-pages)
+  - exploration/api-findings/cron-job-live-verification.md (ShedLock verification)
+"""
 
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
-from datetime import date
+from datetime import datetime
 
-OUTPUT = "/home/v/Dev/ttt-expert-v1/expert-system/output/accounting/accounting.xlsx"
+# ── Styling constants ────────────────────────────────────────
 
-# -- Styles ---------------------------------------------------------------
-ARIAL = "Arial"
-HEADER_FONT = Font(name=ARIAL, bold=True, size=11, color="FFFFFF")
-HEADER_FILL = PatternFill("solid", fgColor="2F5496")
-TITLE_FONT = Font(name=ARIAL, bold=True, size=14)
-SUBTITLE_FONT = Font(name=ARIAL, bold=True, size=12)
-BODY_FONT = Font(name=ARIAL, size=10)
-LINK_FONT = Font(name=ARIAL, size=10, color="0563C1", underline="single")
-BACK_LINK_FONT = Font(name=ARIAL, size=9, color="0563C1", underline="single")
-ROW_EVEN = PatternFill("solid", fgColor="D6E4F0")
-ROW_ODD = PatternFill("solid", fgColor="FFFFFF")
-RISK_CRIT = PatternFill("solid", fgColor="FF6B6B")
-RISK_HIGH = PatternFill("solid", fgColor="FFA07A")
-RISK_MED = PatternFill("solid", fgColor="FFD700")
-RISK_LOW = PatternFill("solid", fgColor="90EE90")
+FONT_HEADER = Font(name="Arial", bold=True, size=11, color="FFFFFF")
+FONT_BODY = Font(name="Arial", size=10)
+FONT_TITLE = Font(name="Arial", bold=True, size=14)
+FONT_SUBTITLE = Font(name="Arial", bold=True, size=12)
+FONT_LINK = Font(name="Arial", size=10, color="0563C1", underline="single")
+FONT_LINK_BOLD = Font(name="Arial", size=11, bold=True, color="0563C1", underline="single")
+FONT_SECTION = Font(name="Arial", bold=True, size=11)
+FONT_SMALL = Font(name="Arial", size=9, italic=True, color="666666")
+
+FILL_HEADER = PatternFill(start_color="2F5496", end_color="2F5496", fill_type="solid")
+FILL_ROW_ODD = PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid")
+FILL_ROW_EVEN = PatternFill(start_color="D6E4F0", end_color="D6E4F0", fill_type="solid")
+FILL_GREEN_HEADER = PatternFill(start_color="548235", end_color="548235", fill_type="solid")
+FILL_RISK_HIGH = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
+FILL_RISK_MED = PatternFill(start_color="FFEB9C", end_color="FFEB9C", fill_type="solid")
+FILL_RISK_LOW = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
+FILL_SECTION = PatternFill(start_color="E2EFDA", end_color="E2EFDA", fill_type="solid")
+
+ALIGN_CENTER = Alignment(horizontal="center", vertical="center", wrap_text=True)
+ALIGN_LEFT = Alignment(horizontal="left", vertical="top", wrap_text=True)
+ALIGN_LEFT_CENTER = Alignment(horizontal="left", vertical="center", wrap_text=True)
+
 THIN_BORDER = Border(
-    left=Side(style="thin"), right=Side(style="thin"),
-    top=Side(style="thin"), bottom=Side(style="thin"),
+    left=Side(style="thin", color="B4C6E7"),
+    right=Side(style="thin", color="B4C6E7"),
+    top=Side(style="thin", color="B4C6E7"),
+    bottom=Side(style="thin", color="B4C6E7"),
 )
-WRAP = Alignment(wrap_text=True, vertical="top")
-WRAP_CENTER = Alignment(wrap_text=True, vertical="top", horizontal="center")
 
-TAB_GREEN = "00B050"
-TAB_BLUE = "4472C4"
+TAB_COLOR_PLAN = "548235"
+TAB_COLOR_TS = "2F5496"
 
 
-def style_header_row(ws, row, max_col):
-    for c in range(1, max_col + 1):
-        cell = ws.cell(row=row, column=c)
-        cell.font = HEADER_FONT
-        cell.fill = HEADER_FILL
-        cell.alignment = Alignment(wrap_text=True, vertical="center", horizontal="center")
+# ── Helper functions ─────────────────────────────────────────
+
+def style_header_row(ws, row, num_cols, fill=None):
+    f = fill or FILL_HEADER
+    for col in range(1, num_cols + 1):
+        cell = ws.cell(row=row, column=col)
+        cell.font = FONT_HEADER
+        cell.fill = f
+        cell.alignment = ALIGN_CENTER
         cell.border = THIN_BORDER
 
 
-def style_data_row(ws, row, max_col, idx):
-    fill = ROW_EVEN if idx % 2 == 0 else ROW_ODD
-    for c in range(1, max_col + 1):
-        cell = ws.cell(row=row, column=c)
-        cell.font = BODY_FONT
-        cell.fill = fill
-        cell.alignment = WRAP
+def write_row(ws, row, values, font=None, fill=None, alignment=None):
+    for col, val in enumerate(values, 1):
+        cell = ws.cell(row=row, column=col, value=val)
+        cell.font = font or FONT_BODY
+        cell.alignment = alignment or ALIGN_LEFT
         cell.border = THIN_BORDER
+        if fill:
+            cell.fill = fill
 
 
-def set_col_widths(ws, widths):
-    for i, w in enumerate(widths, 1):
-        ws.column_dimensions[get_column_letter(i)].width = w
+def add_autofilter(ws, row, num_cols):
+    ws.auto_filter.ref = f"A{row}:{get_column_letter(num_cols)}{ws.max_row}"
 
 
-# -- Test Suite Definitions ------------------------------------------------
-# (id, title, preconditions, steps, expected, priority, type, req_ref, component, notes)
-
-SUITES = []
-
-# ==========================================================================
-# TS-ACC-PeriodEdge -- Period Management Edge Cases & Validation Bugs
-# ==========================================================================
-SUITES.append(("TS-ACC-PeriodEdge", "Period Management Edge Cases & Validation Bugs", [
-    ("TC-ACC-001", "Report period: advance multiple months forward in one operation",
-     "ACCOUNTANT or ADMIN user. Salary office with REPORT period = 2026-03-01.",
-     "1. PATCH /v1/offices/{officeId}/periods/report with start = 2026-07-01\n2. Verify response\n3. Check office_period table",
-     "Period advanced successfully to July. No upper bound or jump-size restriction enforced on report period. DB updated, cache evicted.",
-     "High", "Boundary", "PERIOD-REPORT-01", "OfficePeriodServiceImpl.patchReportPeriod",
-     "Unlike approve period, report period has no max jump limit"),
-
-    ("TC-ACC-002", "Report period: attempt to set before approve period start",
-     "ACCOUNTANT. Office: REPORT=2026-03-01, APPROVE=2026-02-01.",
-     "1. PATCH /v1/offices/{id}/periods/report with start = 2026-01-01 (before approve)\n2. Verify error response",
-     "400 error. Report period cannot precede approve period (strict < check). Error code indicates constraint violation.",
-     "High", "Negative", "PERIOD-REPORT-02", "OfficePeriodServiceImpl",
-     "Invariant: APPROVE ≤ REPORT always"),
-
-    ("TC-ACC-003", "Report period: non-first-day-of-month rejected",
-     "ACCOUNTANT. Salary office.",
-     "1. PATCH /v1/offices/{id}/periods/report with start = 2026-04-15\n2. Verify error response",
-     "400 error. getDayOfMonth() != 1 check at line 91 rejects non-first dates. Error message indicates first day required.",
-     "Medium", "Validation", "PERIOD-REPORT-03", "OfficePeriodServiceImpl:91", ""),
-
-    ("TC-ACC-004", "BUG: Approve period accepts non-first-day-of-month",
-     "ACCOUNTANT. Salary office with APPROVE=2026-02-01.",
-     "1. PATCH /v1/offices/{id}/periods/approve with start = 2026-03-15\n2. Verify response (expect error but currently 200)",
-     "BUG (BUG-PERIOD-1): 200 OK returned, period set to March 15. Missing getDayOfMonth() != 1 check at patchApprovePeriod():104. Report period has this check but approve does not.",
-     "Critical", "Bug", "PERIOD-APPROVE-01, BUG-PERIOD-1", "OfficePeriodServiceImpl:104",
-     "HIGH severity known bug. Compare with patchReportPeriod() line 91 which has the validation."),
-
-    ("TC-ACC-005", "BUG: NPE on null start in PATCH body",
-     "ACCOUNTANT. Any salary office.",
-     "1. PATCH /v1/offices/{id}/periods/report with body {} or {\"start\": null}\n2. Verify response",
-     "BUG (BUG-PERIOD-2): 500 NullPointerException at start.getDayOfMonth(). DTO has @NotNull but @RequestBody lacks @Valid annotation. Stack trace returned in response body.",
-     "Critical", "Bug", "PERIOD-PATCH-01, BUG-PERIOD-2", "OfficePeriodController",
-     "HIGH severity. Both report and approve endpoints affected."),
-
-    ("TC-ACC-006", "Stack trace leakage on invalid date format in period PATCH",
-     "ACCOUNTANT. Salary office.",
-     "1. PATCH /v1/offices/{id}/periods/report with start = 'not-a-date'\n2. Inspect error response body",
-     "BUG (BUG-PERIOD-3): Full Java stack trace (98+ frames) in response body including class names, method names, package structure. Information disclosure risk.",
-     "High", "Security", "PERIOD-PATCH-02, BUG-PERIOD-3", "OfficePeriodController",
-     "MEDIUM severity. Multiple endpoints affected by stack trace leakage."),
-
-    ("TC-ACC-007", "BUG: Permission inconsistency between report and approve min/max",
-     "API token with valid permissions.",
-     "1. GET /v1/offices/periods/report/min with API_SECRET_TOKEN → expect 403\n2. GET /v1/offices/periods/approve/min with API_SECRET_TOKEN → expect 200\n3. Compare authorization behavior",
-     "BUG (BUG-PERIOD-4): Report min/max requires JWT only (rejects API token with 403). Approve min/max accepts both JWT and API token. Inconsistent @PreAuthorize configuration.",
-     "High", "Bug", "PERIOD-AUTH-01, BUG-PERIOD-4", "OfficePeriodController",
-     "MEDIUM severity. Auth configuration inconsistency between similar endpoints."),
-
-    ("TC-ACC-008", "Invalid office ID returns 200 with default period data",
-     "ACCOUNTANT or ADMIN user.",
-     "1. GET /v1/offices/99999/periods/report (nonexistent office)\n2. GET /v1/offices/0/periods/report\n3. GET /v1/offices/-1/periods/report\n4. Verify all return 200 with period data",
-     "BUG: All return 200 with valid-looking period response instead of 404. Silent fallback masks invalid input. Contrast with employee login which properly returns 400.",
-     "High", "Bug", "PERIOD-INPUT-01", "OfficePeriodController",
-     "MEDIUM severity. Should return 404 for nonexistent office."),
-
-    ("TC-ACC-009", "Approve period: max 1-month jump forward enforced",
-     "ACCOUNTANT. Office APPROVE=2026-02-01.",
-     "1. PATCH /v1/offices/{id}/periods/approve with start = 2026-04-01 (2 months ahead)\n2. Verify error response\n3. PATCH with start = 2026-03-01 (1 month ahead)\n4. Verify success",
-     "2-month jump rejected with CODE_ERROR_APPROVE_CHANGE_MORE_THAN_ONE_MONTH. 1-month jump accepted. Maximum 1-month jump in either direction enforced.",
-     "High", "Boundary", "PERIOD-APPROVE-02", "OfficePeriodServiceImpl",
-     "Critical business rule. Accountants must advance month by month."),
-
-    ("TC-ACC-010", "Approve period: 2-month backward limit enforced",
-     "ACCOUNTANT. Office APPROVE=2026-02-01. Current date ~March 2026.",
-     "1. PATCH /v1/offices/{id}/periods/approve with start = 2025-12-01 (3 months ago)\n2. Verify error response\n3. PATCH with start = 2026-01-01 (1 month back)\n4. Verify success",
-     "3-month revert rejected. Cannot go back more than 2 months from today (today.minusMonths(2).withDayOfMonth(2)). 1-month revert accepted.",
-     "High", "Boundary", "PERIOD-APPROVE-03", "OfficePeriodServiceImpl",
-     "Lower bound prevents excessive historical reopening."),
-
-    ("TC-ACC-011", "Non-salary office: GET returns default, PATCH returns 404",
-     "ADMIN user. Non-salary office (e.g. office.salary=FALSE, id=9).",
-     "1. GET /v1/offices/9/periods/report → verify returns computed default\n2. PATCH /v1/offices/9/periods/report with valid start → verify 404\n3. Confirm office.salary=FALSE in DB",
-     "GET returns computed default period (today - 1 month). PATCH returns 404 — non-salary offices cannot have periods modified. Filtered by office.salary = TRUE check.",
-     "Medium", "Functional", "PERIOD-NONSALARY-01", "OfficePeriodServiceImpl",
-     "Non-salary offices (Академгородок, Париж, Дюссельдорф) are legacy/inactive."),
-
-    ("TC-ACC-012", "Period caching: eviction on PATCH, consistency on concurrent GETs",
-     "ACCOUNTANT. Salary office.",
-     "1. GET /v1/offices/{id}/periods/report → note response\n2. PATCH /v1/offices/{id}/periods/report with new start\n3. Immediately GET /v1/offices/{id}/periods/report\n4. Verify updated value returned",
-     "GET after PATCH returns updated period. @Cacheable on getPeriod() evicted per PATCH via SimpleKey(officeId, periodType). No stale cache served.",
-     "Medium", "Functional", "PERIOD-CACHE-01", "OfficePeriodServiceImpl",
-     "Cache eviction is per (officeId, periodType) key."),
-
-    ("TC-ACC-013", "Concurrent period modifications: race condition handling",
-     "Two ACCOUNTANT sessions for the same office.",
-     "1. Session A: PATCH approve period to 2026-03-01\n2. Session B: simultaneously PATCH approve period to 2026-04-01\n3. Verify final state consistency",
-     "One update wins, final state is consistent. Database-level constraint prevents invalid state. No deadlock or data corruption.",
-     "Medium", "Concurrency", "PERIOD-CONCURRENT-01", "OfficePeriodServiceImpl",
-     "No explicit optimistic/pessimistic locking found in code — relies on DB transaction isolation."),
-
-    ("TC-ACC-014", "Report period equals approve period: boundary allowed",
-     "ACCOUNTANT. Office with different report and approve periods.",
-     "1. Set report period to match approve period exactly (both = 2026-02-01)\n2. Verify success\n3. Attempt to set approve period = report period\n4. Verify behavior",
-     "Report = approve is allowed (strict < check, not <=). Setting approve to match report also allowed (strict > check allows equality). Equal periods represent 'caught up' state.",
-     "Medium", "Boundary", "PERIOD-EQUAL-01", "OfficePeriodServiceImpl",
-     "Edge case: approve can be equal to report but not exceed it."),
-]))
-
-# ==========================================================================
-# TS-ACC-PeriodEffects -- Period Change Cross-Service Side Effects
-# ==========================================================================
-SUITES.append(("TS-ACC-PeriodEffects", "Period Change Cross-Service Side Effects", [
-    ("TC-ACC-015", "Approve period advance triggers PeriodChangedEvent via RabbitMQ",
-     "ACCOUNTANT. Office with unapproved reports in closing month. RabbitMQ running.",
-     "1. PATCH /v1/offices/{id}/periods/approve to advance by 1 month\n2. Monitor RabbitMQ messages\n3. Check for PeriodChangedEvent publication",
-     "PeriodChangedEvent published to RabbitMQ exchange. Event contains officeId and new period start. Consumed by vacation service for recalculation.",
-     "Critical", "Integration", "PERIOD-EVENT-01", "OfficePeriodServiceImpl, RabbitMQ",
-     "Key cross-service trigger. Vacation service listens for this event."),
-
-    ("TC-ACC-016", "Approve period advance triggers auto-reject of unapproved reports",
-     "ACCOUNTANT. Office with REPORTED-state reports in the month being closed.",
-     "1. Create reports in REPORTED state for the closing month\n2. PATCH /v1/offices/{id}/periods/approve to advance\n3. Verify reports transitioned to REJECTED state\n4. Check reject table for auto-reject record",
-     "All REPORTED-state reports in closing month auto-rejected. Single shared Reject record created with description='auto.reject.state'. Reports FK set to this reject record.",
-     "Critical", "Integration", "PERIOD-AUTOREJECT-01", "TaskReportServiceImpl.rejectByOfficeId",
-     "Auto-reject is side effect of period advance. Creates entry in reject table with special description."),
-
-    ("TC-ACC-017", "Auto-reject sends email notifications to affected employees",
-     "Office with employees having unapproved reports. Email service running.",
-     "1. Advance approve period (triggering auto-reject)\n2. Verify email notifications sent\n3. Check notification content matches APPROVE_REJECT template",
-     "Email notification sent per affected employee. Uses APPROVE_REJECT template. My Tasks page shows auto-reject warning: 'Unconfirmed hours for task {name} were auto-rejected upon month closure'.",
-     "High", "Integration", "PERIOD-AUTOREJECT-02", "AutoRejectedReportsContainer",
-     "Warning on My Tasks page stored in localStorage (hiddenAutoRejectWarnings)."),
-
-    ("TC-ACC-018", "Approve period advance triggers vacation day recalculation",
-     "ACCOUNTANT. Office with employees having vacation balances.",
-     "1. Note employee vacation day balances before period advance\n2. PATCH /v1/offices/{id}/periods/approve to advance\n3. Verify vacation day recalculation triggered via RabbitMQ\n4. Check updated balances",
-     "Vacation day balances recalculated. PeriodChangedEvent consumed by vacation service triggers bulk recalculation for office employees. Especially impacts advance-vacation offices (AV=true).",
-     "High", "Integration", "PERIOD-RECALC-01", "VacationService, RabbitMQ",
-     "Affects offices with advanceVacation=true: norm deviation recalculation."),
-
-    ("TC-ACC-019", "Approve period revert triggers PeriodReopenedEvent",
-     "ACCOUNTANT. Office with APPROVE period previously advanced.",
-     "1. PATCH /v1/offices/{id}/periods/approve to revert by 1 month\n2. Monitor for PeriodReopenedEvent\n3. Verify employees can now edit reports in reopened month",
-     "PeriodReopenedEvent published. Previously closed month reopened for report editing. No auto-reject reversal — rejected reports remain rejected.",
-     "High", "Integration", "PERIOD-REOPEN-01", "OfficePeriodServiceImpl",
-     "Revert does NOT undo auto-reject. Employees must manually re-report."),
-
-    ("TC-ACC-020", "Extended period blocks approve period advancement",
-     "ACCOUNTANT. Employee has active extended report period in the office.",
-     "1. Create extended period: PUT /v1/periods/report/employees/{login}\n2. PATCH /v1/offices/{id}/periods/approve to advance\n3. Verify error response",
-     "400 error: CODE_ERROR_APPROVE_CHANGE_MORE_THAN_ONE_MONTH or extended period block. Approve period cannot be advanced while any employee has active extended period in the office.",
-     "High", "Negative", "PERIOD-EXTENDED-01", "OfficePeriodServiceImpl",
-     "Extended periods block office-wide approve advance as safety mechanism."),
-
-    ("TC-ACC-021", "Individual extended period: create and auto-cleanup",
-     "ADMIN. Employee without existing extended period.",
-     "1. PUT /v1/periods/report/employees/{login} to create extended period\n2. Verify extended period active\n3. Wait for ExtendedPeriodScheduler cleanup (every 5 min)\n4. Verify auto-removal after expiry",
-     "Extended period created, visible in Individual Period Changing tab. ExtendedPeriodScheduler runs every 5 minutes — removes expired extended periods automatically.",
-     "Medium", "Functional", "PERIOD-EXTENDED-02", "ExtendedPeriodScheduler",
-     "Auto-cleanup prevents stale extended periods blocking office operations."),
-
-    ("TC-ACC-022", "Period advance with no reports in closing month: clean advance",
-     "ACCOUNTANT. Office with no REPORTED-state reports in closing month.",
-     "1. Verify no pending reports for the closing month\n2. PATCH /v1/offices/{id}/periods/approve to advance\n3. Verify clean advance with no auto-reject side effects",
-     "Period advanced successfully. No auto-reject triggered (no matching reports). PeriodChangedEvent still published. Vacation recalculation still triggers.",
-     "Medium", "Functional", "PERIOD-CLEAN-01", "TaskReportServiceImpl",
-     "Edge case: events fire even when no reports are affected."),
-
-    ("TC-ACC-023", "Auto-reject warning display and dismissal on My Tasks page",
-     "Employee whose reports were auto-rejected by period advance.",
-     "1. Login as employee with auto-rejected reports\n2. Navigate to My Tasks page (/report)\n3. Verify AutoRejectedReportsContainer warning displayed\n4. Click 'Go to the report page' link\n5. Click close button to dismiss\n6. Refresh page — verify warning hidden via localStorage",
-     "Warning notification shows at top of Report page: 'Unconfirmed hours for task {taskName} were automatically rejected upon month closure'. Close button stores to localStorage. Warning only queries previous month — older auto-rejections invisible.",
-     "Medium", "UI", "PERIOD-AUTOREJECT-03", "AutoRejectedReportsContainer",
-     "Design issue: single-month window, BO leak in controller, no manager notification."),
-
-    ("TC-ACC-024", "Period advance effect on confirmation page visibility",
-     "MANAGER. Approve period advanced closing a month.",
-     "1. Note confirmation page state before period advance\n2. Accountant advances approve period\n3. Refresh confirmation page (/approve)\n4. Verify closed month no longer shows pending items",
-     "Reports in closed month no longer appear in confirmation page filters. Week tabs update to reflect new approve period boundary. Previously pending reports now show as REJECTED.",
-     "Medium", "Integration", "PERIOD-CONFIRM-01", "Frontend approve module",
-     "Managers see closed month items as rejected, can no longer approve them."),
-
-    ("TC-ACC-025", "Report period advance effect on employee report submission",
-     "EMPLOYEE. Report period advanced forward.",
-     "1. Note current report period\n2. Accountant advances report period forward by 1 month\n3. Employee attempts to report for the previous (now-closed) month\n4. Verify error",
-     "400 error: reportDate before office report period start. Employee can only report for months >= report period start. Closing report period blocks historical edits.",
-     "High", "Integration", "PERIOD-REPORT-EFFECT-01", "TaskReportServiceImpl",
-     "Key business rule: report period gates employee report submission."),
-]))
-
-# ==========================================================================
-# TS-ACC-PayValidation -- Payment Validation Edge Cases & Bugs
-# ==========================================================================
-SUITES.append(("TS-ACC-PayValidation", "Payment Validation Edge Cases & Bugs", [
-    ("TC-ACC-026", "Payment days mismatch: regular + admin != vacation total",
-     "ACCOUNTANT. APPROVED vacation with 5 days.",
-     "1. PUT /v1/vacations/pay/{id} with regularDaysPayed=3, administrativeDaysPayed=1 (total=4, vacation=5)\n2. Verify error response",
-     "400 error: 'exception.vacation.pay.days.not.equal'. Validation: regularDaysPayed + administrativeDaysPayed must equal vacation.getDays(). Sum check at checkForPayment().",
-     "Critical", "Validation", "PAY-VALIDATION-01", "PayVacationService.checkForPayment",
-     "Core validation rule. Prevents incorrect day accounting."),
-
-    ("TC-ACC-027", "Payment of already-PAID vacation rejected",
-     "ACCOUNTANT. Vacation already in PAID status.",
-     "1. PUT /v1/vacations/pay/{id} with correct days\n2. Verify error response",
-     "400 error: 'exception.vacation.status.notAllowed'. Only APPROVED vacations can be paid. PAID status blocks re-payment.",
-     "High", "Negative", "PAY-VALIDATION-02", "PayVacationService.checkForPayment",
-     "Prevents double payment."),
-
-    ("TC-ACC-028", "Payment of APPROXIMATE period vacation rejected",
-     "ACCOUNTANT. Vacation with period type APPROXIMATE (not EXACT).",
-     "1. Find vacation with APPROXIMATE period (future vacation without exact dates)\n2. PUT /v1/vacations/pay/{id}\n3. Verify error response",
-     "400 error. Period type must be EXACT for payment. APPROXIMATE vacations cannot be processed for payment until dates are confirmed.",
-     "High", "Negative", "PAY-VALIDATION-03", "PayVacationService.checkForPayment",
-     "Period precision check. APPROXIMATE = tentative, EXACT = confirmed dates."),
-
-    ("TC-ACC-029", "BUG: Payment type misalignment — ADMIN vacation paid as regular",
-     "ACCOUNTANT. APPROVED ADMINISTRATIVE vacation (paymentType=ADMINISTRATIVE).",
-     "1. PUT /v1/vacations/pay/{id} with regularDaysPayed=1, administrativeDaysPayed=0\n2. Verify response (expect error but currently 200)\n3. Check vacation_payment record in DB",
-     "BUG (BUG-PAY-2): 200 OK. Payment accepted with wrong type distribution. checkForPayment validates only total match (regular+admin==total), NOT that distribution matches paymentType. Allows incorrect accounting classification.",
-     "High", "Bug", "PAY-VALIDATION-04, BUG-PAY-2", "PayVacationService.checkForPayment",
-     "MEDIUM severity. Accounting impact: day type reported incorrectly in financial records."),
-
-    ("TC-ACC-030", "Payment with negative days rejected by @Range validation",
-     "ACCOUNTANT. APPROVED vacation.",
-     "1. PUT /v1/vacations/pay/{id} with regularDaysPayed=-1, administrativeDaysPayed=0\n2. Verify 400 response with validation error",
-     "400 error: 'must be between 0 and 366'. @Range(min=0, max=366) annotation on DTO fields. Bean validation triggers before business logic.",
-     "Medium", "Validation", "PAY-VALIDATION-05", "VacationPaymentDto",
-     "@Range(0-366) on both regularDaysPayed and administrativeDaysPayed."),
-
-    ("TC-ACC-031", "Payment with days > 366 rejected by @Range validation",
-     "ACCOUNTANT. APPROVED vacation.",
-     "1. PUT /v1/vacations/pay/{id} with regularDaysPayed=400, administrativeDaysPayed=0\n2. Verify 400 response",
-     "400 error: 'must be between 0 and 366'. Upper bound of @Range annotation reached. Even if vacation had 400 days (impossible), the field-level validation rejects.",
-     "Low", "Boundary", "PAY-VALIDATION-06", "VacationPaymentDto",
-     "Defensive upper bound check."),
-
-    ("TC-ACC-032", "Payment with null/empty body rejected",
-     "ACCOUNTANT. APPROVED vacation.",
-     "1. PUT /v1/vacations/pay/{id} with empty body {} \n2. PUT with body {\"regularDaysPayed\": null}\n3. Verify 400 responses",
-     "400 error: 'regularDaysPayed must not be null' and/or 'administrativeDaysPayed must not be null'. @NotNull validation on DTO fields.",
-     "Medium", "Validation", "PAY-VALIDATION-07", "VacationPaymentDto",
-     "@NotNull on both payment day fields."),
-
-    ("TC-ACC-033", "Payment for nonexistent vacation ID returns 400 (not 404)",
-     "ACCOUNTANT.",
-     "1. PUT /v1/vacations/pay/999999 with valid body\n2. Verify error response\n3. Note status code (400 vs 404)",
-     "400 error: 'Vacation id not found'. Returns 400 instead of REST-standard 404. Error response format inconsistency with other services.",
-     "Medium", "Negative", "PAY-VALIDATION-08", "PayVacationService",
-     "Error response inconsistency: should be 404 per REST conventions."),
-
-    ("TC-ACC-034", "Payment for CANCELED vacation rejected",
-     "ACCOUNTANT. Vacation in CANCELED status.",
-     "1. Find CANCELED vacation in DB\n2. PUT /v1/vacations/pay/{id}\n3. Verify error response",
-     "400 error: 'exception.vacation.status.notAllowed'. Only APPROVED status allows payment. CANCELED, REJECTED, NEW all blocked.",
-     "Medium", "Negative", "PAY-VALIDATION-09", "PayVacationService.checkForPayment",
-     "Status check: statusAllowed = [APPROVED] only."),
-
-    ("TC-ACC-035", "BUG: Payment dates endpoint accepts start > end",
-     "ACCOUNTANT.",
-     "1. GET /v1/paymentdates?vacationStartDate=2026-04-01&vacationEndDate=2026-03-01 (reversed)\n2. Verify response",
-     "BUG (BUG-PAY-3): Returns valid results (same as normal range). No validation that vacationStartDate <= vacationEndDate. Should reject reversed date range.",
-     "Medium", "Bug", "PAY-VALIDATION-10, BUG-PAY-3", "PaymentDateService",
-     "LOW severity. Misleading but not data-corrupting."),
-
-    ("TC-ACC-036", "BUG: Available paid days accepts negative newDays",
-     "ACCOUNTANT.",
-     "1. GET /v1/vacationdays/available?employeeLogin=X&paymentDate=2026-03-01&newDays=-5\n2. Verify response",
-     "BUG (BUG-PAY-5): Returns availablePaidDays=16.0 without error. Negative newDays should be rejected. Non-positive values produce meaningless calculations.",
-     "Medium", "Bug", "PAY-VALIDATION-11, BUG-PAY-5", "EmployeeDaysService",
-     "LOW severity. Input validation gap."),
-
-    ("TC-ACC-037", "BUG: Stack trace leakage on invalid payment date format",
-     "ACCOUNTANT.",
-     "1. GET /v1/paymentdates?vacationStartDate=2026-13-01&vacationEndDate=2026-14-01\n2. Inspect response body",
-     "BUG (BUG-PAY-6): Full Spring exception with class names and conversion details in response body. Information disclosure risk. Should return clean 400 with message.",
-     "Medium", "Security", "PAY-VALIDATION-12, BUG-PAY-6", "Vacation REST controller",
-     "Information disclosure. Leaks internal class names and framework details."),
-
-    ("TC-ACC-038", "BUG: DB/API data representation inconsistency for ADMINISTRATIVE vacations",
-     "ACCOUNTANT. ADMINISTRATIVE type vacation.",
-     "1. Query DB: SELECT regular_days, administrative_days FROM vacation WHERE payment_type='ADMINISTRATIVE'\n2. GET /v2/vacations/{id} via API\n3. Compare regularDays/administrativeDays values",
-     "BUG (BUG-PAY-4): DB stores ADMINISTRATIVE vacation days in regular_days column (e.g. regular_days=1, administrative_days=0). API returns them swapped: regularDays=0, administrativeDays=1. DTO conversion transposes based on payment_type. DB queries give wrong day-type breakdown.",
-     "High", "Bug", "PAY-VALIDATION-13, BUG-PAY-4", "VacationMapper/DTO conversion",
-     "MEDIUM severity. Impacts any direct DB reporting queries."),
-]))
-
-# ==========================================================================
-# TS-ACC-PayLifecycle -- Payment Lifecycle, Auto-Payment & Day Return
-# ==========================================================================
-SUITES.append(("TS-ACC-PayLifecycle", "Payment Lifecycle, Auto-Payment & Day Return", [
-    ("TC-ACC-039", "Single payment: APPROVED → PAID status transition",
-     "ACCOUNTANT. APPROVED REGULAR vacation (e.g. 5 days).",
-     "1. PUT /v1/vacations/pay/{id} with regularDaysPayed=5, administrativeDaysPayed=0\n2. Verify 200 response\n3. GET /v2/vacations/{id} — verify status = PAID\n4. Check vacation_payment record in DB",
-     "Status transitions to PAID. vacation_payment record created with correct day split. VacationStatusChangedEvent published. Days NOT deducted (already deducted at approval time).",
-     "Critical", "Functional", "PAY-LIFECYCLE-01", "PayVacationService.payVacation",
-     "Key behavior: days deducted at APPROVAL, not payment. Payment is accounting-only transition."),
-
-    ("TC-ACC-040", "Partial payment: fewer regular days → remainder returned to balance",
-     "ACCOUNTANT. APPROVED REGULAR vacation (10 days). Employee has available balance.",
-     "1. Note employee vacation day balances (current + next year)\n2. PUT /v1/vacations/pay/{id} with regularDaysPayed=7, administrativeDaysPayed=3\n3. Verify balance changes\n4. Check day return logic",
-     "3 days returned to balance. Day return priority: nextYearAvailableDays restored first (up to cap of 20), then currentYearDays. Employee balance increases by 3 unpaid regular days.",
-     "Critical", "Functional", "PAY-LIFECYCLE-02", "PayVacationService.payVacation",
-     "Day return logic: FIFO reverse — next year first, then current year."),
-
-    ("TC-ACC-041", "Day return: nextYearAvailableDays cap at 20",
-     "ACCOUNTANT. Employee with nextYearAvailableDays=19. APPROVED vacation 5 days.",
-     "1. Note nextYearAvailableDays=19\n2. Pay with regularDaysPayed=2, administrativeDaysPayed=3 (3 unpaid)\n3. Verify day return: 1 to nextYear (cap at 20), 2 to currentYear",
-     "NextYear gets 1 day (19→20, cap reached). Remaining 2 days go to currentYear balance. NEW_YEAR_VACATION_DAYS constant = 20 enforced as ceiling.",
-     "High", "Boundary", "PAY-LIFECYCLE-03", "VacationDaysBO",
-     "Cap prevents excessive next-year accrual beyond annual entitlement."),
-
-    ("TC-ACC-042", "Batch payment: 'Pay all checked requests' processes multiple vacations",
-     "ACCOUNTANT. Multiple APPROVED vacations selected via checkboxes on payment page.",
-     "1. Navigate to Vacation Payment page (/vacation/payment)\n2. Select 3+ vacation requests via checkboxes\n3. Click 'Pay all checked requests'\n4. Confirm in popup\n5. Verify all selected vacations transition to PAID",
-     "All selected vacations processed. Each generates VacationStatusChangedEvent. Batch payment uses auto-distribution based on paymentType (REGULAR→all regular, ADMINISTRATIVE→all admin). No individual day split selection in batch mode.",
-     "High", "Functional", "PAY-LIFECYCLE-04", "PayVacationService",
-     "Batch popup cannot customize regular/admin split per vacation — auto-distributes."),
-
-    ("TC-ACC-043", "Concurrent payment: write lock prevents duplicate processing",
-     "Two ACCOUNTANT sessions attempting to pay same vacation simultaneously.",
-     "1. Session A: PUT /v1/vacations/pay/{id} (in flight)\n2. Session B: PUT /v1/vacations/pay/{id} simultaneously\n3. Verify one succeeds, other fails\n4. Check for data corruption",
-     "Write lock acquired by first request. Second request either waits (lock contention) or fails with lock error. No duplicate payment created. vacation_payment table has single entry.",
-     "High", "Concurrency", "PAY-LIFECYCLE-05", "PayVacationService (write lock)",
-     "Write lock acquired at method entry. Prevents race conditions."),
-
-    ("TC-ACC-044", "Auto-payment cron: payExpiredApproved processes old APPROVED vacations",
-     "APPROVED vacations older than 2 months exist in DB.",
-     "1. Identify APPROVED vacations with start_date > 2 months ago\n2. Trigger payExpiredApproved (via test API or wait for cron)\n3. Verify auto-paid with correct day distribution\n4. Check ShedLock record",
-     "APPROVED vacations older than today.minusMonths(2).withDayOfMonth(2) auto-paid. Day distribution: REGULAR type → all regularDays, ADMINISTRATIVE type → all adminDays. ShedLock prevents concurrent cron execution across instances.",
-     "High", "Functional", "PAY-LIFECYCLE-06", "VacationPaymentScheduler",
-     "Cron: every 10 min (0 */10 * * * *). ShedLock for distributed safety."),
-
-    ("TC-ACC-045", "BUG: VacationStatusUpdateJob 2-hour orphan window",
-     "NEW_FOR_PAID status update entries in status_updates table.",
-     "1. Query status_updates for NEW_FOR_PAID entries created > 2 hours ago\n2. Trigger VacationStatusUpdateJob (cron or test API)\n3. Verify orphaned entries NOT processed\n4. Check for stuck entries",
-     "BUG (BUG-PAY-1): Entries older than 2 hours permanently orphaned. findRecentNew(now.minusHours(2)) query window excludes old entries. No cleanup/retry mechanism. Found 6 stuck entries for Saturn office.",
-     "Critical", "Bug", "PAY-LIFECYCLE-07, BUG-PAY-1", "VacationStatusUpdateJob",
-     "HIGH severity. Processing window creates permanent orphans. No alerting or recovery."),
-
-    ("TC-ACC-046", "Payment timeline audit: incomplete event fields",
-     "ACCOUNTANT. Pay a vacation and check timeline.",
-     "1. PUT /v1/vacations/pay/{id}\n2. Query vacation timeline events\n3. Check VACATION_PAID event fields",
-     "Timeline event created with type VACATION_PAID. However: days_used=0, administrative_days_used=0 (always zero). previous_status=NULL. Audit trail for payment is incomplete — cannot reconstruct payment details from timeline alone.",
-     "Medium", "Functional", "PAY-LIFECYCLE-08", "VacationTimelineService",
-     "Audit gap: payment event doesn't record day split or pre-payment status."),
-
-    ("TC-ACC-047", "Payment page: ADMINISTRATIVE vacations cannot be paid via UI",
-     "ACCOUNTANT. Vacation Payment page with ADMINISTRATIVE vacation requests.",
-     "1. Navigate to /vacation/payment\n2. Find ADMINISTRATIVE vacation in table\n3. Verify no checkbox, no status, no action buttons",
-     "ADMINISTRATIVE vacations displayed in table but have no status column value, no action buttons, no checkbox for selection. Cannot be marked as paid through UI. Must use API or batch payment button.",
-     "Medium", "UI", "PAY-LIFECYCLE-09", "Frontend VacationPayment component",
-     "UI limitation: ADMINISTRATIVE vacations visible but not actionable individually."),
-
-    ("TC-ACC-048", "Payment month quick tabs navigate correctly",
-     "ACCOUNTANT on Vacation Payment page.",
-     "1. Navigate to /vacation/payment\n2. Verify month quick tabs (Jan-May 2026 visible)\n3. Click each tab\n4. Verify table filters to selected month\n5. Use month picker for non-quick-tab month",
-     "Quick tabs filter payment table to selected month. Month picker allows selection of any month. Unpaid vacation alert banner visible at top when unpaid requests exist for any month.",
-     "Low", "UI", "PAY-LIFECYCLE-10", "Frontend VacationPayment component",
-     "Quick tabs provide fast navigation; month picker for full range."),
-]))
-
-# ==========================================================================
-# TS-ACC-DayCorrect -- Vacation Day Correction Edge Cases
-# ==========================================================================
-SUITES.append(("TS-ACC-DayCorrect", "Vacation Day Correction Edge Cases", [
-    ("TC-ACC-049", "Manual day correction with comment creates audit trail",
-     "ACCOUNTANT. Employee with vacation day balance.",
-     "1. Navigate to /vacation/days-correction\n2. Find employee, click inline edit on 'Vacation days' cell\n3. Change value (e.g. 24 → 20)\n4. Confirm edit with comment explaining reason\n5. Open Events Feed dialog for same employee",
-     "Balance updated to new value. Events feed shows correction event with: date, 'Day correction' event type, previous/new value, comment text. PUT /v1/vacationdays/{login} called with updated value.",
-     "High", "Functional", "DAYCORR-AUDIT-01", "EmployeeDaysService",
-     "Comment is audit trail for accounting corrections. Max 255 chars (backend @Size)."),
-
-    ("TC-ACC-050", "Day correction: negative balance allowed",
-     "ACCOUNTANT. Employee with positive vacation days balance.",
-     "1. Edit employee vacation days to negative value (e.g. -5)\n2. Verify correction accepted\n3. Check employee vacation days balance",
-     "Negative balance accepted and stored. System allows negative vacation days. This differs from regular vacation calculation which shows 0 for negative (RegularCalculation only). AdvanceCalculation offices can legitimately go negative.",
-     "High", "Boundary", "DAYCORR-NEGATIVE-01", "EmployeeDaysService",
-     "Negative balances: RegularCalc displays 0, AdvanceCalc shows actual negative."),
-
-    ("TC-ACC-051", "Bulk recalculation for salary office",
-     "ACCOUNTANT. Salary office with multiple employees.",
-     "1. POST /v1/vacationdays/recalculate with office identifier\n2. Verify all employees in office recalculated\n3. Check for balance changes",
-     "Bulk recalculation processes all active employees in the salary office. Uses FIFO day consumption logic. Returns all regular days to balance then re-distributes among NEW/APPROVED vacations. If insufficient, auto-converts to ADMINISTRATIVE.",
-     "High", "Functional", "DAYCORR-BULK-01", "EmployeeDaysService",
-     "Heavy operation. May change balances for all employees in office."),
-
-    ("TC-ACC-052", "Day correction events feed shows complete history",
-     "ACCOUNTANT. Employee with vacation history (corrections, vacations, payments).",
-     "1. Navigate to /vacation/days-correction\n2. Click events feed button for employee with rich history\n3. Verify dialog content",
-     "Events feed dialog shows: employee name, annual vacation days left, work dates (start-end), events table with columns: Date, Event type, Paid/Unpaid days allowance, Paid/Unpaid days used. Total row at bottom. All corrections, approvals, payments, cancellations listed chronologically.",
-     "Medium", "Functional", "DAYCORR-EVENTS-01", "VacationTimeline",
-     "Events feed is primary audit mechanism for day balance changes."),
-
-    ("TC-ACC-053", "Day correction: dismissed employee filter toggle",
-     "ACCOUNTANT. Both active and dismissed employees exist.",
-     "1. Navigate to /vacation/days-correction\n2. Default view: only active employees\n3. Toggle 'Show dismissed employees' checkbox\n4. Verify dismissed employees appear in table\n5. Attempt to edit dismissed employee's days",
-     "Dismissed employees appear when filter enabled. Day correction should still work for dismissed employees (adjustments may be needed for final accounting). Dismissed employees have distinct visual indication.",
-     "Medium", "Functional", "DAYCORR-DISMISSED-01", "Frontend DaysCorrection component",
-     "Important for final settlement accounting."),
-
-    ("TC-ACC-054", "Available paid days calculation: binary search mode (newDays=0)",
-     "ACCOUNTANT.",
-     "1. GET /v1/vacationdays/available?employeeLogin=X&paymentDate=2026-03-01&newDays=0\n2. Verify response",
-     "Returns maximum safe vacation duration via binary search. availablePaidDays reflects max days employee can take without insufficient balance. daysNotEnough list shows future vacations at risk if more days used.",
-     "Medium", "Functional", "DAYCORR-AVAILABLE-01", "VacationAvailablePaidDaysCalculatorImpl",
-     "Binary search: O(N × log(maxDays)) calls to calculate. Computationally expensive."),
-
-    ("TC-ACC-055", "Available paid days: daysNotEnough warning for at-risk vacations",
-     "ACCOUNTANT. Employee with multiple future APPROVED vacations near balance limit.",
-     "1. GET /v1/vacationdays/available with newDays close to total balance\n2. Check daysNotEnough field in response",
-     "Response includes daysNotEnough: list of future vacation IDs at risk of insufficient days if the proposed new vacation is approved. Helps accountant assess impact of day adjustments on future obligations.",
-     "Medium", "Functional", "DAYCORR-AVAILABLE-02", "VacationAvailablePaidDaysCalculatorImpl",
-     "Warning system for cascading balance impacts."),
-
-    ("TC-ACC-056", "Day correction: maternity special case — all year balances summed",
-     "ACCOUNTANT. Employee with maternity=true flag.",
-     "1. Find employee with maternity=true in DB\n2. GET /v1/vacationdays/available for this employee\n3. Verify available days = sum of ALL year balances",
-     "Maternity employees: available = sum of ALL year balances (no year restriction). Normal employees limited to current + next year. Maternity accumulation allows multi-year rollover.",
-     "Medium", "Boundary", "DAYCORR-MATERNITY-01", "VacationCalculationStrategy",
-     "Special case: maternity=true bypasses year restrictions."),
-
-    ("TC-ACC-057", "No-pagination on vacation days list (1609 records)",
-     "ACCOUNTANT.",
-     "1. GET /v1/vacationdays (no pagination params)\n2. Count returned records\n3. Measure response time",
-     "Returns all 1609 employee records in single response. No pagination support. Response may be slow and large. Contrast with v2 APIs that use pageSize/totalCount pagination.",
-     "Low", "Performance", "DAYCORR-PERF-01", "EmployeeDaysController",
-     "Performance risk. No pagination = entire dataset per request."),
-
-    ("TC-ACC-058", "Day correction: cross-year balance redistribution on FIFO recalc",
-     "ACCOUNTANT. Employee with multiple year balances and APPROVED vacations.",
-     "1. Note per-year balances via GET /v1/vacationdays/{login}/years\n2. Trigger recalculation\n3. Compare per-year balances before and after",
-     "FIFO consumption: days consumed from earliest year first. On recalc: all regular days returned to pool, then re-distributed among NEW/APPROVED using FIFO. If insufficient total, later vacations auto-converted to ADMINISTRATIVE.",
-     "High", "Functional", "DAYCORR-FIFO-01", "VacationDaysService",
-     "FIFO logic can change auto-type assignment of existing vacations."),
-]))
-
-# ==========================================================================
-# TS-ACC-Notifications -- Accounting Notification Triggers & Templates
-# ==========================================================================
-SUITES.append(("TS-ACC-Notifications", "Accounting Notification Triggers & Templates", [
-    ("TC-ACC-059", "Salary page: 'Notify all managers' button sends bulk notifications",
-     "ACCOUNTANT on Salary page (/admin/salary).",
-     "1. Navigate to /admin/salary\n2. Click 'Notify all managers' button\n3. Verify confirmation dialog\n4. Confirm\n5. Check email service for sent notifications",
-     "Bulk notification sent. Uses APPROVE_REQUEST template. Sent to all managers with unconfirmed employee reports. CC's the triggering accountant. POST /v1/reports/accounting/notifications called.",
-     "High", "Functional", "NOTIF-BULK-01", "TaskReportAccountingService.notifyManagers",
-     "Permission: ACCOUNTING.NOTIFY required."),
-
-    ("TC-ACC-060", "Salary page: individual manager notification (envelope icon)",
-     "ACCOUNTANT on Salary page. Manager with unconfirmed reports.",
-     "1. Navigate to /admin/salary\n2. Find row with manager who has unconfirmed reports\n3. Click envelope icon in that row\n4. Verify notification sent to that specific manager",
-     "Individual notification sent to selected manager. Uses APPROVE_REQUEST_FOR_EMPLOYEE template. CC's the triggering accountant. More targeted than bulk notification.",
-     "Medium", "Functional", "NOTIF-INDIVIDUAL-01", "TaskReportAccountingService",
-     "Per-row action button. Template includes specific employee/manager context."),
-
-    ("TC-ACC-061", "Accounting notification email templates: APPROVE_REQUEST and APPROVE_REQUEST_FOR_EMPLOYEE",
-     "Email service running. Accountant triggers notifications.",
-     "1. Trigger 'Notify all managers' → captures APPROVE_REQUEST template\n2. Trigger individual notification → captures APPROVE_REQUEST_FOR_EMPLOYEE template\n3. Verify template content, subject, recipients",
-     "APPROVE_REQUEST: sent to all managers with pending reports. APPROVE_REQUEST_FOR_EMPLOYEE: sent to specific manager for specific employee. Both CC the triggering accountant. Both include salary office, period, and report details.",
-     "Medium", "Functional", "NOTIF-TEMPLATE-01", "Email service templates",
-     "120 templates total, 70 active. These 2 are accounting-specific."),
-
-    ("TC-ACC-062", "Auto-reject notification: email sent to affected employees",
-     "Period advance triggers auto-reject of reports.",
-     "1. Set up REPORTED-state reports for an employee\n2. Advance approve period\n3. Check reject table for auto-reject record (description='auto.reject.state')\n4. Wait for sendRejectNotifications scheduler (every 5 min)\n5. Verify email sent",
-     "sendRejectNotifications scheduler picks up new reject records every 5 min. Sends APPROVE_REJECT template to executor (employee). executor_notified flag set to true after send. Email contains task name, rejection reason, period info.",
-     "High", "Integration", "NOTIF-AUTOREJECT-01", "RejectNotificationScheduler",
-     "5-minute scheduler delay between reject creation and notification."),
-
-    ("TC-ACC-063", "Budget over/under-reporting banner notification triggers",
-     "ADMIN/PM/SPM role. Employees with over or under-reported hours.",
-     "1. Login as PM/ADMIN on Confirmation page (/approve)\n2. Check for non-dismissible banner at top\n3. Verify triggers: over-reporting in current month OR over/under-reporting at month end",
-     "Banner visible when: excess > 0% (over, red highlight) or excess < 0% (under, purple highlight). Shows clock icon with tooltip: deviation %, month, DM, projects with PM names. Non-dismissible — persists until resolved.",
-     "Medium", "UI", "NOTIF-BUDGET-01", "OverReportedBanner component",
-     "Calculation: excess = (reported - budgetNorm) / budgetNorm × 100%. ExcessStatus: HIGH/LOW/NEUTRAL/NA."),
-
-    ("TC-ACC-064", "Forgotten report notification scheduler",
-     "Employees with < 90% of personal norm reported.",
-     "1. Verify sendReportsForgottenNotifications runs Mon/Fri 16:00\n2. Check employees below 90% threshold\n3. Verify notification emails sent",
-     "Employees below 90% personal norm threshold receive forgotten report notification. Runs Mon/Fri at 16:00. Daily retry at 16:30 for deferred notifications. Configurable thresholds in TTT Parameters.",
-     "Medium", "Functional", "NOTIF-FORGOTTEN-01", "ReportForgottenNotificationScheduler",
-     "Two schedulers: main (Mon/Fri 16:00) and delayed retry (daily 16:30)."),
-
-    ("TC-ACC-065", "Accounting report search: permission and auth behavior",
-     "Users with different authentication methods.",
-     "1. GET /v1/reports/accounting with JWT (accountant user) → expect 200\n2. GET /v1/reports/accounting with API token (ACCOUNTING.VIEW permission) → verify behavior\n3. Compare responses",
-     "JWT: works with ACCOUNTING.VIEW permission. API token: returns 403 despite having ACCOUNTING.VIEW — token-vs-session auth discrepancy. Service-layer permission checks behave differently for different auth mechanisms.",
-     "High", "Security", "NOTIF-AUTH-01", "TaskReportAccountingService",
-     "Known auth gap: API token user has roles but service-layer permission checks reject."),
-
-    ("TC-ACC-066", "Reports changed notification: scheduled daily for manager-reported hours",
-     "Manager has reported hours on behalf of employee.",
-     "1. Manager reports hours for another employee via API\n2. Wait for sendReportsChangedNotifications (daily 07:50)\n3. Verify employee receives notification",
-     "Daily scheduler (07:50) detects reports changed by someone other than executor. Sends notification to the affected employee. Includes task name, date, hours changed.",
-     "Medium", "Functional", "NOTIF-CHANGED-01", "ReportsChangedNotificationScheduler",
-     "Detects cross-employee reporting. Daily 07:50 schedule."),
-]))
-
-# ==========================================================================
-# TS-ACC-SickLeaveAcct -- Sick Leave Accounting Workflow Gaps
-# ==========================================================================
-SUITES.append(("TS-ACC-SickLeaveAcct", "Sick Leave Accounting Workflow Gaps", [
-    ("TC-ACC-067", "Sick leave accounting status workflow: New → Pending → Paid",
-     "ACCOUNTANT on Sick Leave Records page (/accounting/sick-leaves).",
-     "1. Find sick leave with status 'New'\n2. Change status dropdown to 'Pending'\n3. Verify status updated\n4. Change status to 'Paid'\n5. Verify final status",
-     "Status transitions: New → Pending → Paid. Each transition updates accounting_status in DB. Status dropdown shows only valid next states. Paid is terminal state.",
-     "High", "Functional", "SL-ACCT-01", "SickLeaveAccountingService",
-     "Dual status model: sick leave status (OPEN/CLOSED/DELETED) × accounting status (NEW/PENDING/PAID/REJECTED)."),
-
-    ("TC-ACC-068", "Sick leave accounting status: Reject workflow",
-     "ACCOUNTANT. Sick leave with status 'New' or 'Pending'.",
-     "1. Find sick leave with status 'New'\n2. Change status to 'Rejected'\n3. Verify status updated\n4. Attempt to change Rejected back to New/Pending\n5. Verify behavior",
-     "New → Rejected: allowed. Pending → Rejected: allowed. Rejected is terminal (no transition back to New/Pending). Rejected sick leaves retain original sick leave status (OPEN/CLOSED) unchanged.",
-     "High", "Functional", "SL-ACCT-02", "SickLeaveAccountingService",
-     "Rejected is terminal for accounting status. Cannot be reopened."),
-
-    ("TC-ACC-069", "Sick leave accounting: Deleted state blocks status changes",
-     "ACCOUNTANT. Sick leave with state 'Deleted'.",
-     "1. Find deleted sick leave in table (state = Deleted)\n2. Verify status dropdown is disabled/absent\n3. Verify no action buttons available",
-     "Deleted sick leaves cannot have accounting status changed. Status dropdown not available. Actions column shows no buttons. Deleted state overrides accounting workflow.",
-     "Medium", "Negative", "SL-ACCT-03", "Frontend SickLeaveAccounting component",
-     "Deleted = hard block. Accounting cannot process deleted sick leaves."),
-
-    ("TC-ACC-070", "Sick leave accounting: overdue alert display",
-     "Sick leaves with overdue state (past end date, still OPEN).",
-     "1. Navigate to /accounting/sick-leaves\n2. Filter by state = 'Overdue'\n3. Verify overdue entries highlighted in red\n4. Check overdue count badge in navigation",
-     "Overdue sick leaves highlighted with red background. Count reflected in nav badge. Overdue = OPEN + endDate < today. Alert helps accountant prioritize processing.",
-     "Medium", "UI", "SL-ACCT-04", "Frontend SickLeaveAccounting component",
-     "GET /v1/accounting/sick-leaves/overdue/count endpoint provides count."),
-
-    ("TC-ACC-071", "Sick leave accounting: concurrent status change by two accountants",
-     "Two ACCOUNTANT sessions viewing same sick leave.",
-     "1. Accountant A: opens sick leave status dropdown\n2. Accountant B: changes status from New to Pending\n3. Accountant A: submits change from New to Paid\n4. Verify final state and conflict handling",
-     "Last write wins or conflict error. No optimistic locking visible in sick leave accounting. Potential for race condition where Accountant A's change overwrites B's intermediate state.",
-     "Medium", "Concurrency", "SL-ACCT-05", "SickLeaveAccountingService",
-     "No explicit concurrency control found in sick leave accounting flow."),
-
-    ("TC-ACC-072", "Sick leave accounting: filter by salary office",
-     "ACCOUNTANT with access to multiple salary offices.",
-     "1. Navigate to /accounting/sick-leaves\n2. Select salary office filter\n3. Verify table filters to selected office\n4. Verify accountant sees only their assigned offices (if not chief accountant)",
-     "Table filtered by selected salary office. ACCOUNTANT sees their office(s) only. CHIEF_ACCOUNTANT sees all offices. ADMIN sees all offices.",
-     "Medium", "Functional", "SL-ACCT-06", "Frontend SickLeaveAccounting component",
-     "Role-based office visibility: ACC=own, CACC/ADMIN=all."),
-
-    ("TC-ACC-073", "Sick leave accounting: sort by dates (descending default)",
-     "ACCOUNTANT on Sick Leave Records page.",
-     "1. Navigate to /accounting/sick-leaves\n2. Verify default sort: sick leave dates descending\n3. Click date column header to toggle sort\n4. Verify ascending sort works",
-     "Default: descending by sick leave dates (newest first). Click toggles asc/desc. All sortable columns work: Employee, Dates, Days, Work days, Sick note number, Salary office.",
-     "Low", "UI", "SL-ACCT-07", "Frontend SickLeaveAccounting component",
-     "Existing Qase suite 230 covers sort/filter but not all edge cases."),
-]))
-
-# ==========================================================================
-# TS-ACC-APIErrors -- API Error Handling, Auth Gaps & Information Disclosure
-# ==========================================================================
-SUITES.append(("TS-ACC-APIErrors", "API Error Handling, Auth Gaps & Information Disclosure", [
-    ("TC-ACC-074", "GET /v1/reports/accounting returns 403 despite valid ACCOUNTING.VIEW permission",
-     "API token user with ACCOUNTING.VIEW permission. JWT accountant user.",
-     "1. GET /v1/reports/accounting with API_SECRET_TOKEN → verify 403\n2. GET /v1/reports/accounting with JWT (accountant) → verify 200\n3. GET /v1/authentication/permissions → verify ACCOUNTING: [VIEW, NOTIFY]",
-     "API token: 403 despite having ACCOUNTING.VIEW permission. JWT: 200 success. Service-layer permission checks behave differently for token vs session auth. AUTHENTICATED_USER authority required but not granted to API tokens.",
-     "High", "Security", "API-AUTH-01", "TaskReportAccountingController",
-     "Known auth gap. Token has permission but lacks AUTHENTICATED_USER authority."),
-
-    ("TC-ACC-075", "BUG: status=ALL causes 500 NPE on vacation list",
-     "Any authenticated user.",
-     "1. GET /v2/vacations?status=ALL\n2. Verify 500 response\n3. Check error details",
-     "BUG: 500 NullPointerException at VacationRepositoryCustomImpl.buildCommonCondition:433. ALL enum passed as null to repository which doesn't handle null status. Other status values (APPROVED, PAID, etc.) work correctly.",
-     "High", "Bug", "API-ERROR-01", "VacationRepositoryCustomImpl:433",
-     "NPE in repository layer. Missing null handling for ALL enum value."),
-
-    ("TC-ACC-076", "Information disclosure: multiple endpoints return Java stack traces",
-     "Any authenticated user. Invalid inputs.",
-     "1. GET /v1/paymentdates with invalid date format → check for stack trace\n2. PATCH period with null body → check for stack trace\n3. GET /v1/offices/*/periods with invalid format → check for stack trace",
-     "Multiple endpoints return full Java stack traces (class names, method names, line numbers, package structure). ExceptionHandler doesn't catch all exception types. Leaks internal architecture details.",
-     "High", "Security", "API-SECURITY-01", "Global ExceptionHandler",
-     "OWASP: Improper Error Handling. Stack traces should never reach client."),
-
-    ("TC-ACC-077", "Pagination inconsistency: v1 vs v2 API responses",
-     "Any authenticated user.",
-     "1. GET v1 paginated endpoint → check pagination fields (size, totalElements)\n2. GET v2 paginated endpoint → check pagination fields (pageSize, totalCount)\n3. GET /v1/vacationdays → verify no pagination at all\n4. Document inconsistencies",
-     "v1 uses: size, totalElements, totalPages. v2 uses: pageSize, totalCount. Vacation days list (/v1/vacationdays) has NO pagination — returns all 1609 records. Inconsistent pagination contracts across API versions.",
-     "Medium", "Consistency", "API-CONSISTENCY-01", "Multiple controllers",
-     "3 different pagination approaches in same API. Impacts API consumer development."),
-
-    ("TC-ACC-078", "Error response inconsistency: TTT vs Vacation service errors",
-     "Various error-triggering requests across services.",
-     "1. Trigger error in TTT service → check errorCode field present\n2. Trigger error in Vacation service → check for trace field\n3. Request nonexistent vacation ID → verify 400 (not 404)\n4. Request nonexistent office ID → verify 200 (not 404)",
-     "TTT returns structured errors with errorCode. Vacation sometimes includes 'trace' field, sometimes doesn't. Nonexistent vacation: 400 (wrong — should be 404). Nonexistent office: 200 with default data (wrong — should be 404). No consistent error contract.",
-     "Medium", "Consistency", "API-CONSISTENCY-02", "TTT/Vacation error handlers",
-     "Cross-service error handling inconsistency complicates error parsing."),
-
-    ("TC-ACC-079", "Period min/max endpoints: cross-office aggregation correctness",
-     "ACCOUNTANT or ADMIN user. Multiple offices with different period dates.",
-     "1. GET /v1/offices/periods/report/min → verify returns earliest report period\n2. GET /v1/offices/periods/report/max → verify returns latest report period\n3. GET /v1/offices/periods/approve/min → verify earliest approve period\n4. GET /v1/offices/periods/approve/max → verify latest approve period\n5. Cross-check with individual office periods",
-     "Min returns earliest date across all salary offices. Max returns latest. Currently all 27 offices identical (REPORT=March, APPROVE=Feb), so min=max. Would diverge if offices advanced at different times.",
-     "Medium", "Functional", "API-PERIOD-01", "OfficePeriodController",
-     "Useful for accounting dashboard to show period range across offices."),
-
-    ("TC-ACC-080", "Individual employee period: GET and extended period interaction",
-     "ADMIN. Employee with and without extended periods.",
-     "1. GET /v1/periods/report/employees/{login} for normal employee → verify matches office period\n2. Create extended period for employee\n3. GET again → verify extended period returned\n4. GET /v1/periods/report/employees → verify extended period list",
-     "Normal employee returns office-level period. Extended period overrides for individual. Extended period list shows all employees with active extensions. Empty list when no extensions exist (currently empty on test envs).",
-     "Medium", "Functional", "API-PERIOD-02", "EmployeeExtendedPeriodController",
-     "employee_work_period table newly created but unpopulated on test environments."),
-
-    ("TC-ACC-081", "Vacation days grouped by years: per-year breakdown correctness",
-     "ACCOUNTANT.",
-     "1. GET /v1/vacationdays/{login}/years\n2. Verify per-year breakdown\n3. Check for negative year values (corrections)\n4. Cross-check with total available days",
-     "Returns array of {year, days} per employee. Negative values possible for correction years (e.g. {year:2025, days:-60}). Sum of all years should approximately equal total available days (accounting for in-progress vacations).",
-     "Medium", "Functional", "API-DAYS-01", "EmployeeDaysController",
-     "Negative year values from manual corrections. Cross-check with /v1/vacationdays."),
-
-    ("TC-ACC-082", "Days summary timeline: totalAccrued, totalUsed, totalAdministrative",
-     "ACCOUNTANT.",
-     "1. GET /v1/timelines/days-summary/{login}\n2. Verify totalAccruedDays matches calculation formula\n3. Verify totalUsedDays accounts for all APPROVED+PAID regular vacations\n4. Verify totalAdministrativeDays accounts for unpaid vacations",
-     "Summary provides: totalAccruedDays (formula-based, includes adjustments), totalUsedDays (regular vacation days consumed), totalAdministrativeDays (unpaid/admin days). Values consistent with per-year breakdown and available balance.",
-     "Medium", "Functional", "API-DAYS-02", "VacationTimelineService",
-     "High-level summary endpoint. Cross-reference with /years and /available."),
-]))
-
-
-# -- Risk Assessment -------------------------------------------------------
-RISKS = [
-    ("Period advance with unapproved reports", "Auto-reject may silently reject employee work",
-     "High", "Critical", "Critical",
-     "Test auto-reject thoroughly: TS-ACC-PeriodEffects TC-ACC-016/017"),
-    ("VacationStatusUpdateJob orphan window", "Payment status updates permanently lost after 2 hours",
-     "Medium", "Critical", "High",
-     "BUG-PAY-1: TS-ACC-PayLifecycle TC-ACC-045. No recovery mechanism."),
-    ("Missing first-day validation on approve period", "Non-standard period dates corrupt monthly processing",
-     "High", "High", "Critical",
-     "BUG-PERIOD-1: TS-ACC-PeriodEdge TC-ACC-004"),
-    ("NPE on null period start", "Server crash on malformed input",
-     "Medium", "High", "High",
-     "BUG-PERIOD-2: TS-ACC-PeriodEdge TC-ACC-005"),
-    ("Payment type misalignment allowed", "Incorrect accounting classification of vacation days",
-     "Medium", "High", "High",
-     "BUG-PAY-2: TS-ACC-PayValidation TC-ACC-029"),
-    ("DB/API day type representation inconsistency", "Financial reports from DB queries show wrong day types",
-     "High", "High", "Critical",
-     "BUG-PAY-4: TS-ACC-PayValidation TC-ACC-038"),
-    ("Stack trace information disclosure", "Internal architecture exposed to clients",
-     "High", "Medium", "High",
-     "Multiple endpoints: TS-ACC-PeriodEdge TC-ACC-006, TS-ACC-PayValidation TC-ACC-037"),
-    ("API token auth gap for accounting endpoints", "Automated integrations cannot access accounting data",
-     "Medium", "Medium", "Medium",
-     "TS-ACC-APIErrors TC-ACC-074. AUTHENTICATED_USER not granted to API tokens."),
-    ("Concurrent period modifications without locking", "Race condition on critical accounting operation",
-     "Low", "High", "Medium",
-     "TS-ACC-PeriodEdge TC-ACC-013. No explicit locking found."),
-    ("No pagination on vacation days list", "Performance degradation as employee count grows",
-     "Medium", "Medium", "Medium",
-     "TS-ACC-DayCorrect TC-ACC-057. 1609 records per request."),
-    ("Auto-payment cron orphan risk", "APPROVED vacations not auto-paid if timing edge case",
-     "Low", "Medium", "Low",
-     "TS-ACC-PayLifecycle TC-ACC-044. ShedLock prevents dual execution."),
-    ("Audit trail gaps in payment timeline events", "Cannot reconstruct payment details from event log",
-     "Medium", "Medium", "Medium",
-     "TS-ACC-PayLifecycle TC-ACC-046. days_used=0, previous_status=NULL."),
-    ("Sick leave concurrent accounting status change", "Race condition between two accountants",
-     "Low", "Medium", "Low",
-     "TS-ACC-SickLeaveAcct TC-ACC-071. No optimistic locking."),
-]
-
-# -- Feature Matrix --------------------------------------------------------
-FEATURES = [
-    # (feature, ts_tab, functional, negative, boundary, security, integration, bug, concurrency)
-    ("Period Management — Edge Cases", "TS-ACC-PeriodEdge", 3, 2, 3, 1, 0, 4, 1),
-    ("Period Change — Cross-Service Effects", "TS-ACC-PeriodEffects", 4, 1, 0, 0, 5, 0, 1),
-    ("Payment Validation — Error Handling", "TS-ACC-PayValidation", 0, 3, 2, 1, 0, 5, 0),
-    ("Payment Lifecycle — Auto-Payment", "TS-ACC-PayLifecycle", 5, 0, 1, 0, 0, 1, 1),
-    ("Day Correction — Edge Cases", "TS-ACC-DayCorrect", 6, 0, 2, 0, 0, 0, 0),
-    ("Notifications — Triggers & Templates", "TS-ACC-Notifications", 5, 0, 0, 1, 1, 0, 0),
-    ("Sick Leave Accounting — Workflow Gaps", "TS-ACC-SickLeaveAcct", 4, 1, 0, 0, 0, 0, 1),
-    ("API Errors — Auth & Disclosure", "TS-ACC-APIErrors", 4, 0, 0, 2, 0, 1, 0),
-]
-
-# ==========================================================================
-# Build workbook
-# ==========================================================================
-
-wb = openpyxl.Workbook()
-wb.remove(wb.active)
-
-# -- Plan Overview ---------------------------------------------------------
-ws = wb.create_sheet("Plan Overview")
-ws.sheet_properties.tabColor = TAB_GREEN
-set_col_widths(ws, [20, 90])
-
-plan_rows = [
-    ("Test Plan", "Accounting Supplements — Gap Coverage"),
-    ("Date", str(date.today())),
-    ("Phase", "B — Generation (Supplements to existing 127 Qase cases)"),
-    ("Module", "Accounting: Period Management, Vacation Payment, Day Corrections, Notifications, Sick Leave Accounting"),
-    ("", ""),
-    ("Scope", "This workbook supplements 127 existing Qase test cases (Suite 207, sub-suites 209-234) that cover:\n"
-              "• Salary page: search (2), filters (8), table display (6)\n"
-              "• Period changes: basic rules (5), dates/sorting (4), individual periods (5)\n"
-              "• Vacation payment: table/filters/sorting (26), individual pay popup (7), payment execution (5), batch (5)\n"
-              "• Day correction: search (4), events + corrections (18)\n"
-              "• Sick leave accounting: sort/filter/actions/alerts (27)\n\n"
-              "This supplement focuses on GAPS not covered by Qase:\n"
-              "• Period edge cases: validation bugs, boundary conditions, non-first-day bug, NPE on null\n"
-              "• Period cross-service effects: auto-reject, vacation recalc, RabbitMQ events, extended periods\n"
-              "• Payment validation: error handling, type misalignment bug, DB/API inconsistency\n"
-              "• Payment lifecycle: partial payment, day return logic, auto-payment cron, orphan window\n"
-              "• Day correction: negative balances, bulk recalc, FIFO redistribution, maternity edge case\n"
-              "• Accounting notifications: manager notify, auto-reject emails, forgotten reports\n"
-              "• Sick leave accounting: status workflow transitions, concurrent changes, overdue alerts\n"
-              "• API-level: auth gaps, information disclosure, pagination inconsistency"),
-    ("", ""),
-    ("Environments", "Primary: timemachine (ttt-timemachine.noveogroup.com)\n"
-                     "Secondary: qa-1 (ttt-qa-1.noveogroup.com)\n"
-                     "Production baseline: stage (ttt-stage.noveogroup.com)"),
-    ("", ""),
-    ("Test Data Strategy", "• Period operations: use timemachine clock manipulation for date-dependent tests\n"
-                           "• Payment tests: APPROVED vacations (query DB: SELECT * FROM vacation WHERE status='APPROVED')\n"
-                           "• Day correction: employees with non-zero balances\n"
-                           "• Sick leave accounting: mix of NEW/PENDING/PAID/REJECTED statuses\n"
-                           "• Cross-service: set up REPORTED-state reports before period advance\n"
-                           "• API tokens: use API_SECRET_TOKEN header with test API key"),
-    ("", ""),
-    ("Key Accounts", "• perekrest: CHIEF_ACCOUNTANT + ACCOUNTANT (all offices)\n"
-                     "• accountant users: office-specific access\n"
-                     "• admin: full access\n"
-                     "• regular employees: for report/vacation targets"),
-    ("", ""),
-    ("Known Bugs Referenced", "• BUG-PERIOD-1: Missing first-day-of-month validation on approve period (HIGH)\n"
-                              "• BUG-PERIOD-2: NPE on null start in PATCH body (HIGH)\n"
-                              "• BUG-PERIOD-3: Stack trace leakage on invalid date format (MEDIUM)\n"
-                              "• BUG-PERIOD-4: Permission inconsistency report vs approve min/max (MEDIUM)\n"
-                              "• BUG-PAY-1: VacationStatusUpdateJob 2-hour orphan window (HIGH)\n"
-                              "• BUG-PAY-2: Payment type misalignment allowed (MEDIUM)\n"
-                              "• BUG-PAY-3: Payment dates start > end accepted (MEDIUM)\n"
-                              "• BUG-PAY-4: DB/API day type representation inconsistency (MEDIUM)\n"
-                              "• BUG-PAY-5: Available days accepts negative newDays (LOW)\n"
-                              "• BUG-PAY-6: Stack trace leakage on invalid payment date (MEDIUM)\n"
-                              "• NPE on status=ALL: VacationRepositoryCustomImpl:433 (HIGH)"),
-    ("", ""),
-    ("Test Suite Links", ""),
-]
-
-r = 1
-for label, value in plan_rows:
-    ws.cell(row=r, column=1, value=label).font = SUBTITLE_FONT if label else BODY_FONT
-    ws.cell(row=r, column=2, value=value).font = BODY_FONT
-    ws.cell(row=r, column=2).alignment = WRAP
-    r += 1
-
-suite_link_start = r
-for suite_name, suite_title, cases in SUITES:
-    cell = ws.cell(row=r, column=2,
-                   value=f"{suite_name}: {suite_title} — {len(cases)} cases")
-    cell.font = LINK_FONT
-    cell.hyperlink = f"#'{suite_name}'!A1"
-    r += 1
-
-# -- Feature Matrix --------------------------------------------------------
-ws2 = wb.create_sheet("Feature Matrix")
-ws2.sheet_properties.tabColor = TAB_GREEN
-set_col_widths(ws2, [35, 22, 12, 12, 12, 12, 12, 10, 14, 10])
-
-feat_headers = ["Feature Area", "Test Suite Tab", "Functional", "Negative",
-                "Boundary", "Security", "Integration", "Bug", "Concurrency", "Total"]
-for c, h in enumerate(feat_headers, 1):
-    ws2.cell(row=1, column=c, value=h)
-style_header_row(ws2, 1, len(feat_headers))
-
-for idx, (feat, tab, func, neg, bnd, sec, integ, bug, conc) in enumerate(FEATURES):
-    r = idx + 2
-    total = func + neg + bnd + sec + integ + bug + conc
-    vals = [feat, tab, func, neg, bnd, sec, integ, bug, conc, total]
-    for c, v in enumerate(vals, 1):
-        cell = ws2.cell(row=r, column=c, value=v)
-        if c == 2:
-            cell.font = LINK_FONT
-            cell.hyperlink = f"#'{tab}'!A1"
-    style_data_row(ws2, r, len(feat_headers), idx)
-
-# Totals row
-total_r = len(FEATURES) + 2
-ws2.cell(row=total_r, column=1, value="TOTAL").font = Font(name=ARIAL, bold=True, size=10)
-for c in range(3, 11):
-    total = sum(ws2.cell(row=r, column=c).value or 0 for r in range(2, total_r))
-    ws2.cell(row=total_r, column=c, value=total).font = Font(name=ARIAL, bold=True, size=10)
-for c in range(1, 11):
-    ws2.cell(row=total_r, column=c).border = THIN_BORDER
-    ws2.cell(row=total_r, column=c).fill = PatternFill("solid", fgColor="E2EFDA")
-
-ws2.auto_filter.ref = f"A1:J{total_r}"
-
-# -- Risk Assessment -------------------------------------------------------
-ws3 = wb.create_sheet("Risk Assessment")
-ws3.sheet_properties.tabColor = TAB_GREEN
-set_col_widths(ws3, [40, 50, 12, 12, 12, 55])
-
-risk_headers = ["Risk", "Description", "Likelihood", "Impact", "Severity", "Mitigation / Test Focus"]
-for c, h in enumerate(risk_headers, 1):
-    ws3.cell(row=1, column=c, value=h)
-style_header_row(ws3, 1, len(risk_headers))
-
-sev_fills = {"Critical": RISK_CRIT, "High": RISK_HIGH, "Medium": RISK_MED, "Low": RISK_LOW}
-
-for idx, (risk, desc, likelihood, impact, severity, mitigation) in enumerate(RISKS):
-    r = idx + 2
-    for c, v in enumerate([risk, desc, likelihood, impact, severity, mitigation], 1):
-        ws3.cell(row=r, column=c, value=v)
-    style_data_row(ws3, r, len(risk_headers), idx)
-    ws3.cell(row=r, column=5).fill = sev_fills.get(severity, ROW_ODD)
-
-ws3.auto_filter.ref = f"A1:F{len(RISKS) + 1}"
-
-# -- Test Suite Tabs -------------------------------------------------------
-TC_HEADERS = ["Test ID", "Title", "Preconditions", "Steps", "Expected Result",
-              "Priority", "Type", "Requirement Ref", "Module / Component", "Notes"]
-TC_WIDTHS = [14, 40, 30, 45, 45, 10, 12, 22, 30, 35]
-
-for suite_name, suite_title, cases in SUITES:
-    ws = wb.create_sheet(suite_name)
-    ws.sheet_properties.tabColor = TAB_BLUE
-
-    # Back link
-    cell = ws.cell(row=1, column=1, value="← Back to Plan Overview")
-    cell.font = BACK_LINK_FONT
+def add_back_link(ws, row=1):
+    cell = ws.cell(row=row, column=1)
+    cell.value = "<- Back to Plan"
+    cell.font = FONT_LINK
     cell.hyperlink = "#'Plan Overview'!A1"
 
-    # Title
-    ws.cell(row=2, column=1, value=f"{suite_name}: {suite_title}").font = TITLE_FONT
-    ws.cell(row=3, column=1, value=f"{len(cases)} test cases").font = BODY_FONT
+
+def write_ts_tab(ws, suite_name, test_cases):
+    add_back_link(ws, row=1)
+    ws.cell(row=1, column=2, value=f"Suite: {suite_name}").font = FONT_SUBTITLE
+
+    headers = [
+        "Test ID", "Title", "Preconditions", "Steps",
+        "Expected Result", "Priority", "Type",
+        "Requirement Ref", "Module/Component", "Notes"
+    ]
+    header_row = 3
+    for col, h in enumerate(headers, 1):
+        cell = ws.cell(row=header_row, column=col, value=h)
+        cell.font = FONT_HEADER
+        cell.fill = FILL_HEADER
+        cell.alignment = ALIGN_CENTER
+        cell.border = THIN_BORDER
+
+    for i, tc_item in enumerate(test_cases):
+        row = header_row + 1 + i
+        fill = FILL_ROW_EVEN if i % 2 == 0 else FILL_ROW_ODD
+        values = [
+            tc_item["id"], tc_item["title"], tc_item["preconditions"],
+            tc_item["steps"], tc_item["expected"], tc_item["priority"],
+            tc_item["type"], tc_item["req_ref"], tc_item["module"],
+            tc_item.get("notes", "")
+        ]
+        write_row(ws, row, values, fill=fill)
+
+    add_autofilter(ws, header_row, len(headers))
+
+    col_widths = [14, 40, 35, 55, 45, 10, 12, 20, 25, 35]
+    for i, w in enumerate(col_widths, 1):
+        ws.column_dimensions[get_column_letter(i)].width = w
+
+    ws.freeze_panes = "A4"
+    return len(test_cases)
+
+
+def tc(id_, title, pre, steps, expected, priority, type_, req, module, notes=""):
+    return {
+        "id": id_, "title": title, "preconditions": pre,
+        "steps": steps, "expected": expected, "priority": priority,
+        "type": type_, "req_ref": req, "module": module, "notes": notes
+    }
+
+
+# =====================================================================
+# TEST CASE DATA — 6 suites
+# =====================================================================
+
+# ── TS-ACC-Periods (Report & Approve Period Management) ──────
+
+TS_ACC_PERIODS = [
+    tc("TC-ACC-001",
+       "Report period: advance one month forward",
+       "Logged in as accountant with OFFICES_EDIT on target salary office.\n"
+       "Current report period = March 2026.",
+       "1. GET /api/ttt/v1/offices/{officeId}/periods/report — note current start\n"
+       "2. PATCH /api/ttt/v1/offices/{officeId}/periods/report\n"
+       "   Body: {\"start\": \"2026-04-01\"}\n"
+       "3. GET period again to verify",
+       "HTTP 200. Report period updated to 2026-04-01.\n"
+       "OfficePeriodChangedApplicationEvent published.\n"
+       "Period cache evicted (CACHE_OFFICE_PERIOD).\n"
+       "Employees can no longer submit reports for March.",
+       "Critical", "Functional",
+       "REQ-period-management", "OfficePeriodController, OfficePeriodServiceImpl"),
+
+    tc("TC-ACC-002",
+       "Report period: non-first-day-of-month rejected",
+       "Accountant with OFFICES_EDIT.",
+       "1. PATCH /api/ttt/v1/offices/{officeId}/periods/report\n"
+       "   Body: {\"start\": \"2026-04-15\"}\n"
+       "2. Verify error response",
+       "HTTP 400. Error code: exception.validation.period.not.first.day.of.month.\n"
+       "Period unchanged.",
+       "High", "Validation",
+       "REQ-period-management", "OfficePeriodServiceImpl.patchReportPeriod",
+       "Validation enforced at service level, not DTO — mid-month date passes DTO parsing"),
+
+    tc("TC-ACC-003",
+       "Report period: set before approve period rejected",
+       "Report period = April 2026, Approve period = February 2026.",
+       "1. PATCH /api/ttt/v1/offices/{officeId}/periods/report\n"
+       "   Body: {\"start\": \"2026-01-01\"}\n"
+       "2. Verify error",
+       "HTTP 400. Error: exception.validation.period.report.before.approve.\n"
+       "Invariant: APPROVE_PERIOD_START <= REPORT_PERIOD_START enforced.",
+       "Critical", "Negative",
+       "REQ-period-management", "OfficePeriodServiceImpl",
+       "Key invariant — ensures approve period cannot exceed report period"),
+
+    tc("TC-ACC-004",
+       "Approve period: advance one month forward",
+       "Accountant with OFFICES_EDIT. Current approve = Feb 2026.\n"
+       "No employees have extended periods in this office.",
+       "1. GET /api/ttt/v1/offices/{officeId}/periods/approve\n"
+       "2. PATCH /api/ttt/v1/offices/{officeId}/periods/approve\n"
+       "   Body: {\"start\": \"2026-03-01\"}\n"
+       "3. GET period again",
+       "HTTP 200. Approve period updated to 2026-03-01.\n"
+       "OfficePeriodChangedApplicationEvent published.\n"
+       "If TTT_VACATION_ASYNC enabled: RabbitMQ message to TTT_BACKEND_OFFICE_PERIOD_TOPIC.\n"
+       "If disabled: synchronous vacationClient.recalculateAvailableDays() called.",
+       "Critical", "Functional",
+       "REQ-period-management", "OfficePeriodServiceImpl, InternalOfficePeriodService"),
+
+    tc("TC-ACC-005",
+       "Approve period: revert (move backward) triggers reopen event",
+       "Approve period = March 2026.",
+       "1. PATCH /api/ttt/v1/offices/{officeId}/periods/approve\n"
+       "   Body: {\"start\": \"2026-02-01\"}\n"
+       "2. Verify period changed\n"
+       "3. Check RabbitMQ events (or vacation days recalculation reverse)",
+       "HTTP 200. Approve period moved back to 2026-02-01.\n"
+       "OfficePeriodReopenedApplicationEvent published.\n"
+       "RabbitMQ: TTT_BACKEND_OFFICE_PERIOD_REOPENED_TOPIC.\n"
+       "Vacation days recalculation reverse triggered (restores ConfirmationPeriodDays).",
+       "Critical", "Functional",
+       "REQ-period-management", "InternalOfficePeriodService.setPeriodStart",
+       "Reopen vs change distinction: backward = reopen, forward = change"),
+
+    tc("TC-ACC-006",
+       "Approve period: 2-month backward limit enforced",
+       "Today = March 2026. Approve period = March 2026.",
+       "1. PATCH approve period to {\"start\": \"2025-12-01\"}\n"
+       "   (3 months back — exceeds 2-month min)\n"
+       "2. PATCH approve period to {\"start\": \"2026-01-01\"}\n"
+       "   (2 months back — at limit)",
+       "Step 1: HTTP 400. Error: exception.validation.period.approve.start.min.\n"
+       "Min = today.minusMonths(2).withDayOfMonth(1) = 2026-01-01.\n"
+       "Step 2: HTTP 200. At boundary — accepted.",
+       "High", "Boundary",
+       "REQ-period-management", "OfficePeriodServiceImpl.patchApprovePeriod"),
+
+    tc("TC-ACC-007",
+       "Approve period: max 1-month jump enforced",
+       "Current approve = Feb 2026.",
+       "1. PATCH approve to {\"start\": \"2026-04-01\"}\n"
+       "   (2 months forward from current — exceeds 1-month limit)\n"
+       "2. PATCH approve to {\"start\": \"2026-03-01\"}\n"
+       "   (1 month forward — at limit)",
+       "Step 1: HTTP 400. Error: exception.validation.period.approve.change.more.than.one.month.\n"
+       "Step 2: HTTP 200. Within 1-month forward/backward change limit.",
+       "High", "Boundary",
+       "REQ-period-management", "OfficePeriodServiceImpl.patchApprovePeriod"),
+
+    tc("TC-ACC-008",
+       "Approve period: cannot exceed report period",
+       "Report period = March 2026. Approve period = February 2026.",
+       "1. PATCH approve to {\"start\": \"2026-04-01\"}\n"
+       "   (exceeds report period)",
+       "HTTP 400. Error: exception.validation.period.approve.start.max.\n"
+       "Approve period cannot be after report period start.",
+       "High", "Negative",
+       "REQ-period-management", "OfficePeriodServiceImpl.patchApprovePeriod"),
+
+    tc("TC-ACC-009",
+       "Approve period: blocked when any employee has extended period",
+       "Employee X has extended report period in this office.",
+       "1. PATCH approve to advance one month\n"
+       "2. Verify error",
+       "HTTP 400. Error: approve.notAllowed.extendedPeriod (via MessageUtil).\n"
+       "Entire office blocked by single employee with extension.",
+       "High", "Negative",
+       "REQ-period-management", "OfficePeriodServiceImpl.patchApprovePeriod",
+       "Design issue: ANY employee blocks ALL. Must remove all extensions first."),
+
+    tc("TC-ACC-010",
+       "BUG: Approve period accepts non-first-day-of-month",
+       "Accountant with OFFICES_EDIT.",
+       "1. PATCH approve period to {\"start\": \"2026-03-15\"}\n"
+       "2. Verify response",
+       "BUG: HTTP 200 — mid-month date accepted.\n"
+       "Report period enforces first-of-month check but approve period does NOT.\n"
+       "Missing validation in patchApprovePeriod.",
+       "Critical", "Bug verification",
+       "BUG-PERIOD-1", "OfficePeriodServiceImpl.patchApprovePeriod",
+       "Confirmed in S52 live testing. Report period has this check, approve does not."),
+
+    tc("TC-ACC-011",
+       "BUG: NPE on null start in PATCH body",
+       "Accountant with OFFICES_EDIT.",
+       "1. PATCH /api/ttt/v1/offices/{officeId}/periods/report\n"
+       "   Body: {}\n"
+       "2. Verify error response",
+       "BUG: HTTP 500 NullPointerException.\n"
+       "PeriodPatchRequestDTO has @NotNull on start field but NPE occurs before validation.\n"
+       "Should return 400 with validation error.",
+       "High", "Bug verification",
+       "BUG-PERIOD-2", "OfficePeriodController",
+       "Stack trace leakage — security issue"),
+
+    tc("TC-ACC-012",
+       "Period min/max cross-office aggregation",
+       "Multiple salary offices exist with different period settings.",
+       "1. GET /api/ttt/v1/offices/periods/report/min\n"
+       "2. GET /api/ttt/v1/offices/periods/report/max\n"
+       "3. GET /api/ttt/v1/offices/periods/approve/min\n"
+       "4. GET /api/ttt/v1/offices/periods/approve/max",
+       "Each returns the earliest/latest period start across all offices.\n"
+       "Min returns the oldest open period.\n"
+       "Max returns the most advanced period.",
+       "Medium", "Functional",
+       "REQ-period-management", "OfficePeriodController",
+       "Used by frontend to determine date picker boundaries"),
+
+    tc("TC-ACC-013",
+       "Report period equals approve period: boundary",
+       "Report = March 2026, Approve = March 2026 (same month).",
+       "1. Verify both periods at same month\n"
+       "2. PATCH report period to April (advance)\n"
+       "3. Verify approve still at March",
+       "Both periods can be at the same month.\n"
+       "Report can advance independently.\n"
+       "Report period must always >= approve period.",
+       "Medium", "Boundary",
+       "REQ-period-management", "OfficePeriodServiceImpl"),
+
+    tc("TC-ACC-014",
+       "Period advance triggers auto-reject of unapproved reports",
+       "Reports exist in the period being closed.\n"
+       "Some reports are unapproved (state=REPORTED).",
+       "1. PATCH approve period to advance one month\n"
+       "2. Check if unapproved reports are auto-rejected\n"
+       "3. Verify email notifications sent to affected employees",
+       "Unapproved reports in closed period are auto-rejected.\n"
+       "Reject notifications sent via sendRejectNotifications scheduler.\n"
+       "Auto-reject sets state to REJECTED with system comment.",
+       "Critical", "Integration",
+       "REQ-report-confirmation", "PeriodChangedApplicationEventListener",
+       "Cascading effect — period change affects report states"),
+
+    tc("TC-ACC-015",
+       "Period advance triggers vacation day recalculation",
+       "Approve period at February. Employees have time reports for February.",
+       "1. PATCH approve period to March\n"
+       "2. Check vacation day balances for affected employees\n"
+       "3. Verify norm-based recalculation ran",
+       "If office NormDeviationType != NONE and AV=true:\n"
+       "AvailableDaysRecalculationServiceImpl recalculates.\n"
+       "Difference = reported - personalNorm.\n"
+       "daysDelta = difference / 8, scale 3, HALF_UP.\n"
+       "ConfirmationPeriodDays records saved for potential reverse.",
+       "High", "Integration",
+       "REQ-norm-recalculation", "AvailableDaysRecalculationServiceImpl",
+       "Only runs if NormDeviationType != NONE AND isAdvanceVacation == true"),
+
+    tc("TC-ACC-016",
+       "Period caching: eviction on PATCH, cache hit on GET",
+       "Period already queried (cached).",
+       "1. GET period — note response time\n"
+       "2. GET period again — should be from cache\n"
+       "3. PATCH period — evicts cache\n"
+       "4. GET period — fresh from DB",
+       "Cache key: CACHE_OFFICE_PERIOD.\n"
+       "PATCH explicitly evicts cache entry.\n"
+       "Subsequent GET fetches from database.",
+       "Low", "Performance",
+       "REQ-period-management", "OfficePeriodCacheConfiguration"),
+
+    tc("TC-ACC-017",
+       "BUG: AUTHENTICATED_USER permission on PATCH endpoints",
+       "Regular employee (no OFFICES_EDIT permission).",
+       "1. PATCH /api/ttt/v1/offices/{officeId}/periods/report\n"
+       "   Body: {\"start\": \"2026-05-01\"}\n"
+       "2. Verify response",
+       "HTTP 403 Forbidden.\n"
+       "Controller annotation uses AUTHENTICATED_USER (overly permissive),\n"
+       "but OfficePeriodValidator.validateWriteAccess() provides real access control.\n"
+       "Should still return 403 due to service-level guard.",
+       "High", "Security",
+       "BUG-PERIOD-3", "OfficePeriodController, OfficePeriodValidator",
+       "Design issue: controller-level @PreAuthorize is too broad, relies on service-level check"),
+
+    tc("TC-ACC-018",
+       "BUG: Invalid office ID returns 200 with default data",
+       "Valid authentication.",
+       "1. GET /api/ttt/v1/offices/99999/periods/report\n"
+       "2. GET /api/ttt/v1/offices/0/periods/report\n"
+       "3. GET /api/ttt/v1/offices/-1/periods/report",
+       "BUG: Returns 200 with default period = previous month 1st day.\n"
+       "Should return 404 for nonexistent office.\n"
+       "InternalOfficePeriodService.findPeriodStart defaults to previousMonthFirstDay.",
+       "High", "Bug verification",
+       "BUG-PERIOD-4", "InternalOfficePeriodService",
+       "Design issue: default period for non-existent offices masks errors"),
+
+    tc("TC-ACC-019",
+       "Extended period: grant and verify employee can report in approve period",
+       "Office with report period=April, approve period=March.\n"
+       "Employee X is in this office.",
+       "1. PUT extended period for employee X\n"
+       "2. GET employee report period — should return approve period start (March)\n"
+       "3. Verify employee can submit reports for March dates\n"
+       "4. Verify notification sent about extension",
+       "Employee X can report from March (approve period) instead of April (report period).\n"
+       "getEmployeeReportPeriod returns approve period start when extension active.\n"
+       "Email notification sent on grant.",
+       "High", "Functional",
+       "REQ-extended-period", "EmployeeExtendedPeriodServiceImpl"),
+
+    tc("TC-ACC-020",
+       "Extended period: remove and verify employee reverts to normal",
+       "Employee X has active extended period.",
+       "1. DELETE extended period for employee X\n"
+       "2. GET employee report period — should return report period start\n"
+       "3. Verify notification sent about removal",
+       "Employee X can no longer report in approve period.\n"
+       "getEmployeeReportPeriod returns report period start.\n"
+       "Email notification sent on removal.",
+       "High", "Functional",
+       "REQ-extended-period", "EmployeeExtendedPeriodServiceImpl"),
+
+    tc("TC-ACC-021",
+       "Extended period: cron cleanup of expired extensions",
+       "Extended periods exist with expired deadlines.",
+       "1. Trigger ExtendedPeriodScheduler.cleanUp (cron: every 5min)\n"
+       "2. Verify expired extensions removed\n"
+       "3. Verify affected employees notified",
+       "Expired extensions automatically cleaned up.\n"
+       "ShedLock-protected: only one instance runs.\n"
+       "Affected employees notified via email.",
+       "Medium", "Functional",
+       "REQ-extended-period", "ExtendedPeriodScheduler",
+       "Runs every 5 minutes, ShedLock name: ExtendedPeriodScheduler.cleanUp"),
+
+    tc("TC-ACC-022",
+       "Concurrent period modifications by two accountants",
+       "Two accountants have OFFICES_EDIT on same office.",
+       "1. Accountant A sends PATCH to advance report period\n"
+       "2. Accountant B sends PATCH to advance report period (simultaneously)\n"
+       "3. Verify one succeeds and the other gets consistent state",
+       "Both should succeed sequentially (no optimistic locking on periods).\n"
+       "Final state should be consistent (last write wins).\n"
+       "No 500 errors or corrupt state.",
+       "Medium", "Concurrency",
+       "REQ-period-management", "OfficePeriodServiceImpl"),
+]
+
+# ── TS-ACC-Payment (Vacation Payment Flow) ───────────────────
+
+TS_ACC_PAYMENT = [
+    tc("TC-ACC-023",
+       "Pay vacation: APPROVED → PAID with correct day split",
+       "APPROVED vacation (id=V, REGULAR, 10 days) for employee.\n"
+       "Logged in as accountant/chief accountant.",
+       "1. GET /api/vacation/v1/vacationdays/{login} — note current balance\n"
+       "2. PUT /api/vacation/v1/vacations/pay/{V}\n"
+       "   Body: {\"regularDaysPayed\": 10, \"administrativeDaysPayed\": 0}\n"
+       "3. GET vacation — verify status=PAID\n"
+       "4. GET vacation days — verify balance unchanged",
+       "HTTP 200. Status transitions to PAID.\n"
+       "VacationPaymentEntity created with regularDaysPayed=10.\n"
+       "vacation_payment record linked.\n"
+       "VacationStatusChangedEvent published.\n"
+       "Vacation days balance UNCHANGED — deduction happens at approval, not payment.",
+       "Critical", "Functional",
+       "REQ-vacation-payment", "PayVacationServiceImpl.payVacation",
+       "Key insight: days deducted at APPROVAL, payment is accounting-only status change"),
+
+    tc("TC-ACC-024",
+       "Payment days mismatch: regularDays + adminDays != vacation.days",
+       "APPROVED vacation with 5 total days.",
+       "1. PUT pay with {\"regularDaysPayed\": 3, \"administrativeDaysPayed\": 0}\n"
+       "2. Verify error",
+       "HTTP 400. Error: exception.vacation.pay.days.not.equal.\n"
+       "checkForPayment validates: regularDaysPayed + administrativeDaysPayed == entity.getDays().\n"
+       "Must submit exact total.",
+       "Critical", "Validation",
+       "REQ-vacation-payment", "PayVacationServiceImpl.checkForPayment"),
+
+    tc("TC-ACC-025",
+       "Payment rejected for non-APPROVED vacation",
+       "Vacation in NEW status (not yet approved).",
+       "1. PUT pay vacation in NEW status\n"
+       "2. PUT pay vacation in CANCELED status\n"
+       "3. PUT pay vacation in REJECTED status",
+       "All return HTTP 400. Error: exception.vacation.status.notAllowed.\n"
+       "Only APPROVED vacations can be paid.",
+       "High", "Negative",
+       "REQ-vacation-payment", "PayVacationServiceImpl.checkForPayment"),
+
+    tc("TC-ACC-026",
+       "Payment rejected for APPROXIMATE period type",
+       "APPROVED vacation with periodType=APPROXIMATE (future dates uncertain).",
+       "1. PUT pay this vacation\n"
+       "2. Verify error",
+       "HTTP 400. Error: exception.vacation.period.type.notAllowed.\n"
+       "Only EXACT period vacations can be paid — dates must be finalized.",
+       "High", "Negative",
+       "REQ-vacation-payment", "PayVacationServiceImpl.checkForPayment"),
+
+    tc("TC-ACC-027",
+       "Payment rejected for already-PAID vacation",
+       "Vacation already in PAID status.",
+       "1. PUT pay this vacation again\n"
+       "2. Verify error",
+       "HTTP 400. Error: exception.vacation.status.notAllowed.\n"
+       "Already-PAID vacation cannot be paid again (idempotency fail).",
+       "High", "Negative",
+       "REQ-vacation-payment", "PayVacationServiceImpl.checkForPayment"),
+
+    tc("TC-ACC-028",
+       "Payment: write lock prevents concurrent duplicate payments",
+       "APPROVED vacation V.",
+       "1. Send two simultaneous PUT /pay/{V} requests\n"
+       "2. Verify one succeeds, other fails or is queued",
+       "Write lock acquired via findByIdAndAcquireWriteLock.\n"
+       "Second request blocks until first completes.\n"
+       "If first succeeds, second gets 400 (already PAID).\n"
+       "No duplicate payment records created.",
+       "High", "Concurrency",
+       "REQ-vacation-payment", "PayVacationServiceImpl",
+       "Uses SELECT FOR UPDATE in repository"),
+
+    tc("TC-ACC-029",
+       "Payment validation: regularDaysPayed range 0-366",
+       "APPROVED vacation.",
+       "1. PUT pay with {\"regularDaysPayed\": -1, \"administrativeDaysPayed\": 0}\n"
+       "2. PUT pay with {\"regularDaysPayed\": 367, \"administrativeDaysPayed\": 0}\n"
+       "3. PUT pay with {\"regularDaysPayed\": 0, \"administrativeDaysPayed\": 0}",
+       "Step 1: HTTP 400. @Range(0,366) violation.\n"
+       "Step 2: HTTP 400. @Range(0,366) violation.\n"
+       "Step 3: HTTP 400 (days mismatch unless vacation has 0 days).",
+       "Medium", "Boundary",
+       "REQ-vacation-payment", "VacationPaymentDTO"),
+
+    tc("TC-ACC-030",
+       "Payment: null/empty body rejected",
+       "APPROVED vacation.",
+       "1. PUT pay with empty body {}\n"
+       "2. PUT pay with null body",
+       "HTTP 400. regularDaysPayed and administrativeDaysPayed must not be null (@NotNull).",
+       "Medium", "Validation",
+       "REQ-vacation-payment", "VacationPaymentDTO"),
+
+    tc("TC-ACC-031",
+       "BUG: Payment type misalignment allowed",
+       "ADMINISTRATIVE vacation (1 day).",
+       "1. PUT pay with {\"regularDaysPayed\": 1, \"administrativeDaysPayed\": 0}\n"
+       "   (paying admin vacation as regular)\n"
+       "2. Verify response and DB",
+       "BUG: HTTP 200 — payment accepted with wrong type split.\n"
+       "checkForPayment validates only total (regular+admin==days),\n"
+       "NOT that the split matches paymentType.\n"
+       "Causes incorrect accounting classification.",
+       "High", "Bug verification",
+       "BUG-PAY-1", "PayVacationServiceImpl.checkForPayment",
+       "Confirmed in live testing. ADMINISTRATIVE vac paid with regularDaysPayed=1."),
+
+    tc("TC-ACC-032",
+       "BUG: Same error code for 5 different payment failures",
+       "Various invalid payment states.",
+       "1. Pay non-APPROVED vacation → exception.vacation.status.notAllowed\n"
+       "2. Pay APPROXIMATE period → same code\n"
+       "3. Pay without accountant role → same code\n"
+       "4. Observe that 3 distinct failures return identical error code",
+       "BUG: All 4 scenarios return exception.vacation.status.notAllowed.\n"
+       "Cannot distinguish cause from error response.\n"
+       "Only days mismatch has distinct code: exception.vacation.pay.days.not.equal.",
+       "Medium", "Bug verification",
+       "BUG-PAY-2", "PayVacationServiceImpl.checkForPayment",
+       "Design issue: impossible for frontend/user to know what went wrong"),
+
+    tc("TC-ACC-033",
+       "Partial payment: day return to balance",
+       "REGULAR vacation for 5 days. Employee has 3 nextYear + 2 thisYear days used.",
+       "1. PUT pay with {\"regularDaysPayed\": 3, \"administrativeDaysPayed\": 0}\n"
+       "   (paying 3 of 5 days)\n"
+       "2. GET vacation days — check balance change",
+       "HTTP 200 (if total matches — but this is 3 != 5 → rejected).\n"
+       "NOTE: partial payment is NOT supported by the current validation.\n"
+       "regularDaysPayed + administrativeDaysPayed MUST equal vacation.getDays().\n"
+       "The returnDaysToEmployeeIfPaidLess logic exists but is unreachable for partial.",
+       "High", "Functional",
+       "REQ-vacation-payment", "PayVacationServiceImpl",
+       "Misleading: code has returnDaysToEmployeeIfPaidLess but validation prevents partial pay"),
+
+    tc("TC-ACC-034",
+       "Administrative vacation: skip day redistribution on payment",
+       "APPROVED administrative vacation, 2 days.",
+       "1. PUT pay with {\"regularDaysPayed\": 0, \"administrativeDaysPayed\": 2}\n"
+       "2. GET vacation days before and after",
+       "HTTP 200. Status → PAID.\n"
+       "ADMINISTRATIVE vacations skip returnDaysToEmployeeIfPaidLess entirely.\n"
+       "Day balance unchanged (admin days not deducted from regular balance).",
+       "High", "Functional",
+       "REQ-vacation-payment", "PayVacationServiceImpl"),
+
+    tc("TC-ACC-035",
+       "Auto-payment cron: payExpiredApproved",
+       "APPROVED vacations older than 2 months exist.",
+       "1. Trigger AutomaticallyPayApprovedTask (cron: daily 00:00 NSK)\n"
+       "2. Check vacation statuses after\n"
+       "3. Verify payment records created",
+       "APPROVED vacations with endDate < today.minusMonths(2).withDayOfMonth(2) are auto-paid.\n"
+       "Each auto-payment: regularDays or adminDays assigned based on paymentType.\n"
+       "ShedLock name: CloseOutdatedTask.run.\n"
+       "Status → PAID.",
+       "High", "Functional",
+       "REQ-vacation-payment", "PayVacationServiceImpl.payExpiredApproved",
+       "Hardcoded 2-month threshold, Collections.singleton(0L) magic value"),
+
+    tc("TC-ACC-036",
+       "Payment dates endpoint: valid calculation",
+       "Valid vacation dates.",
+       "1. GET /api/vacation/v1/paymentdates?vacationStartDate=2026-06-01&vacationEndDate=2026-06-14\n"
+       "2. Verify date list",
+       "Returns set of 1st-of-month dates between:\n"
+       "(vacStart - 2 months, bounded by report period) and (vacEnd + 6 months).\n"
+       "E.g. 2026-04-01 through 2026-12-01 (array of LocalDate).",
+       "Medium", "Functional",
+       "REQ-vacation-payment", "VacationPaymentController"),
+
+    tc("TC-ACC-037",
+       "BUG: Payment dates accepts start > end",
+       "Valid authentication.",
+       "1. GET /api/vacation/v1/paymentdates?vacationStartDate=2026-04-01&vacationEndDate=2026-03-01\n"
+       "   (start after end)",
+       "BUG: HTTP 200 — returns valid results (same as normal range).\n"
+       "No validation that vacationStartDate <= vacationEndDate.",
+       "Medium", "Bug verification",
+       "BUG-PAY-3", "VacationPaymentController",
+       "Confirmed in live testing"),
+
+    tc("TC-ACC-038",
+       "Available paid days: binary search mode (newDays=0)",
+       "Employee with vacation days balance.",
+       "1. GET /api/vacation/v1/vacationdays/available\n"
+       "   ?employeeLogin={login}&paymentDate=2026-06-01&newDays=0\n"
+       "2. Verify response",
+       "newDays=0 triggers binary search mode.\n"
+       "Returns maximum safe days (availablePaidDays).\n"
+       "daysNotEnough array lists future vacations that would be affected.",
+       "Medium", "Functional",
+       "REQ-vacation-payment", "EmployeeDaysServiceImpl",
+       "Used by payment UI main page mode"),
+
+    tc("TC-ACC-039",
+       "BUG: Available paid days accepts negative newDays",
+       "Valid employee login.",
+       "1. GET /api/vacation/v1/vacationdays/available?...&newDays=-5\n"
+       "2. Verify response",
+       "BUG: Returns availablePaidDays=16.0 without error.\n"
+       "Should reject non-positive newDays values.",
+       "Low", "Bug verification",
+       "BUG-PAY-4", "EmployeeDaysServiceImpl",
+       "Confirmed in live testing"),
+
+    tc("TC-ACC-040",
+       "BUG: VacationStatusUpdateJob 2-hour orphan window",
+       "Vacation payment creates NEW_FOR_PAID status_updates entry.",
+       "1. Create vacation payment (triggers status update job entry)\n"
+       "2. Wait >2 hours (or check DB for stuck entries)\n"
+       "3. Query: SELECT * FROM status_updates WHERE status='NEW_FOR_PAID'\n"
+       "   AND created < now() - interval '2 hours'",
+       "BUG: VacationStatusUpdateJob queries findRecentNew(now.minusHours(2)).\n"
+       "Entries older than 2 hours are permanently orphaned.\n"
+       "Found 6 stuck entries for Saturn office (created 18:22-18:27, >19h old).\n"
+       "No cleanup/retry mechanism exists.",
+       "Critical", "Bug verification",
+       "BUG-PAY-5", "VacationStatusUpdateJob",
+       "Entries are lost forever — no retry, no alerting, no manual recovery"),
+
+    tc("TC-ACC-041",
+       "BUG: DB/API data representation inconsistency for ADMINISTRATIVE vacations",
+       "ADMINISTRATIVE vacation in database.",
+       "1. Query DB: SELECT regular_days, administrative_days FROM vacation WHERE id={V}\n"
+       "2. GET /api/vacation/v1/vacations/{V}\n"
+       "3. Compare DB vs API representation",
+       "BUG: ADMINISTRATIVE vacations store days in DB regular_days column\n"
+       "(e.g., regular_days=1, administrative_days=0),\n"
+       "but API returns them swapped: regularDays=0, administrativeDays=1.\n"
+       "DTO conversion transposes based on payment_type.\n"
+       "DB queries for reporting give wrong day-type breakdowns.",
+       "High", "Bug verification",
+       "BUG-PAY-6", "VacationMapper / DTO conversion",
+       "Confirmed in live testing"),
+
+    tc("TC-ACC-042",
+       "Payment timeline audit: VACATION_PAID event completeness",
+       "Pay a vacation and check timeline.",
+       "1. PUT pay vacation\n"
+       "2. GET /api/vacation/v1/timelines/days-summary/{login}\n"
+       "3. Check timeline events for VACATION_PAID",
+       "Timeline event created with type=VACATION_PAID.\n"
+       "BUG: days_used=0, administrative_days_used=0 — event doesn't record\n"
+       "how many days were paid or the regular/admin split.\n"
+       "previous_status=NULL. Audit trail incomplete.",
+       "Medium", "Functional",
+       "REQ-vacation-payment", "PayVacationServiceImpl",
+       "Audit gap — cannot reconstruct payment details from timeline alone"),
+
+    tc("TC-ACC-043",
+       "Nonexistent vacation ID payment returns 400 not 404",
+       "Valid accountant auth.",
+       "1. PUT /api/vacation/v1/vacations/pay/99999999\n"
+       "2. Verify error code and HTTP status",
+       "HTTP 400. Error: 'Vacation id not found' (plain text, not standard error code).\n"
+       "Should be 404 per REST conventions.",
+       "Medium", "Negative",
+       "REQ-vacation-payment", "PayVacationServiceImpl",
+       "Error handling inconsistency — 400 vs 404"),
+
+    tc("TC-ACC-044",
+       "Bulk payment via UI: 'Pay all checked requests'",
+       "Multiple APPROVED vacations visible on /vacation/payment page.",
+       "1. Navigate to /vacation/payment\n"
+       "2. Check multiple regular vacation checkboxes\n"
+       "3. Click 'Pay all checked requests'\n"
+       "4. Verify all selected become PAID",
+       "All checked vacations paid in batch.\n"
+       "Administrative vacations have no checkbox — excluded from bulk.\n"
+       "Individual VacationPaymentEntity created per vacation.\n"
+       "Page refreshes to show updated statuses.",
+       "High", "UI",
+       "REQ-vacation-payment", "Accounting Payment page",
+       "UI observation: admin vacations have no checkbox, no status, no actions"),
+]
+
+# ── TS-ACC-DayCorrection (Vacation Day Correction & Recalculation) ──
+
+TS_ACC_DAYCORRECTION = [
+    tc("TC-ACC-045",
+       "Manual correction: positive adjustment with comment",
+       "Logged in as accountant. Employee in accountant's assigned office.\n"
+       "Employee available days = 20.0, AV=true.",
+       "1. PUT /api/vacation/v1/vacationdays/{login}\n"
+       "   Body: {\"availableDays\": 21.0, \"comment\": \"Annual correction\"}\n"
+       "2. GET vacation days — verify new balance\n"
+       "3. Check timeline for DAYS_ADJUSTMENT event",
+       "HTTP 200. availableDays updated to 21.0.\n"
+       "DAYS_ADJUSTMENT timeline event with days_accrued=1.000.\n"
+       "Comment 'Annual correction' stored in event.",
+       "Critical", "Functional",
+       "REQ-day-correction", "EmployeeDaysServiceImpl.manualAdjustment"),
+
+    tc("TC-ACC-046",
+       "Manual correction: negative adjustment (AV=true office)",
+       "Employee in AV=true office. Available days = 20.0.",
+       "1. PUT /api/vacation/v1/vacationdays/{login}\n"
+       "   Body: {\"availableDays\": 18.0, \"comment\": \"Overpayment fix\"}\n"
+       "2. Verify balance update",
+       "HTTP 200. Days reduced by 2.\n"
+       "Negative adjustment allowed for AV=true offices.\n"
+       "Zeroes out previous years' balances, sets current year to correction value.\n"
+       "DAYS_ADJUSTMENT event with negative delta.",
+       "High", "Functional",
+       "REQ-day-correction", "EmployeeDaysServiceImpl.manualAdjustForNegativeDaysChanged"),
+
+    tc("TC-ACC-047",
+       "Manual correction: negative adjustment rejected for AV=false office",
+       "Employee in AV=false office (e.g., Venera). Available days = 88.0.",
+       "1. PUT /api/vacation/v1/vacationdays/{login}\n"
+       "   Body: {\"availableDays\": 83.0, \"comment\": \"Reduction\"}\n"
+       "2. Verify error",
+       "HTTP 400. InvalidVacationDaysCorrectionException.\n"
+       "Error: exception.invalid.vacation.days.correction.\n"
+       "AV=false offices cannot have negative corrections.",
+       "Critical", "Negative",
+       "REQ-day-correction", "EmployeeDaysServiceImpl.manualAdjustment",
+       "Confirmed in live testing with abaymaganov on Venera"),
+
+    tc("TC-ACC-048",
+       "Manual correction: comment required (1-255 chars)",
+       "Accountant with correct permissions.",
+       "1. PUT with {\"availableDays\": 21, \"comment\": \"\"}\n"
+       "2. PUT with {\"availableDays\": 21, \"comment\": null}\n"
+       "3. PUT with {\"availableDays\": 21} (no comment field)\n"
+       "4. PUT with comment of 256 characters",
+       "Steps 1-3: HTTP 400 — comment @NotNull @Size(min=1).\n"
+       "Step 4: HTTP 400 — @Size(max=255) exceeded.\n"
+       "Comment is required for audit trail.",
+       "High", "Validation",
+       "REQ-day-correction", "UpdateVacationDaysDTO"),
+
+    tc("TC-ACC-049",
+       "Manual correction: no numeric limit on availableDays",
+       "AV=true office employee.",
+       "1. PUT with {\"availableDays\": 99999.999, \"comment\": \"test\"}\n"
+       "2. PUT with {\"availableDays\": -100, \"comment\": \"test\"}\n"
+       "3. PUT with {\"availableDays\": 0, \"comment\": \"test\"}",
+       "All accepted (no @Range on availableDays in DTO).\n"
+       "Step 2: accepted for AV=true (no range validation).\n"
+       "Step 3: accepted (zero balance valid).\n"
+       "Only AV=false blocks negative at service level, not DTO level.",
+       "Medium", "Boundary",
+       "REQ-day-correction", "UpdateVacationDaysDTO, EmployeeDaysServiceImpl",
+       "No upper or lower bound validation in DTO — extreme values accepted"),
+
+    tc("TC-ACC-050",
+       "Manual correction: permission check — accountant for correct office only",
+       "Accountant assigned to office A. Employee is in office B.",
+       "1. PUT correction for employee in office B\n"
+       "2. Verify error",
+       "HTTP 403. VacationSecurityException.\n"
+       "statusManager.isAccountant(getCurrent()) must be true AND\n"
+       "employee's officeId must be in accountant's assigned offices.",
+       "High", "Security",
+       "REQ-day-correction", "EmployeeDaysServiceImpl.manualAdjustment"),
+
+    tc("TC-ACC-051",
+       "BUG: pastPeriodsAvailableDays drift on net-zero corrections",
+       "Employee with pastPeriodsAvailableDays = 5.625.",
+       "1. PUT correction +1 day\n"
+       "2. PUT correction -1 day (back to original total)\n"
+       "3. GET vacation days — check pastPeriodsAvailableDays",
+       "BUG: pastPeriodsAvailableDays drifts downward.\n"
+       "After net-zero cycle: 5.625 → 0.\n"
+       "Root cause: increases don't add to sub-components,\n"
+       "but decreases subtract from pastPeriodsAvailableDays first (oldest-first).\n"
+       "Total availableDays correct but sub-component breakdown drifts.\n"
+       "Bulk recalculate does NOT fix this.",
+       "High", "Bug verification",
+       "BUG-DAYS-1", "EmployeeDaysServiceImpl",
+       "Confirmed in live testing: abpopov 5.625→0 after 4 net-zero corrections"),
+
+    tc("TC-ACC-052",
+       "BUG: double arithmetic for financial day calculations",
+       "Positive adjustment where daysChangedByAccounting > availableDays.",
+       "1. PUT correction with fractional value near floating point boundary\n"
+       "   e.g., availableDays=0.1+0.2 (JavaScript: 0.30000000000000004)\n"
+       "2. Verify storage precision",
+       "Potential precision issue: code uses double arithmetic.\n"
+       "daysToSubract variable uses doubleValue() for BigDecimal operations.\n"
+       "Risk of floating point rounding errors in financial calculations.",
+       "Medium", "Bug verification",
+       "BUG-DAYS-2", "EmployeeDaysServiceImpl.manualAdjustForPositiveDaysChanged",
+       "Design issue: double for financial math. Impact depends on specific values."),
+
+    tc("TC-ACC-053",
+       "Bulk recalculate for salary office",
+       "Office with multiple employees.",
+       "1. POST /api/vacation/v1/vacationdays/recalculate?officeId={id}&date={today}\n"
+       "2. Check for DAYS_ADJUSTMENT events for affected employees",
+       "HTTP 200. Recalculation runs for all employees in office.\n"
+       "Creates DAYS_ADJUSTMENT events for employees with norm differences.\n"
+       "Only affects employees who started before recalculation month.\n"
+       "Only runs if NormDeviationType != NONE and AV=true.",
+       "High", "Functional",
+       "REQ-norm-recalculation", "AvailableDaysRecalculationServiceImpl",
+       "Tested: POST recalculate created +1.313 days for amatiushin"),
+
+    tc("TC-ACC-054",
+       "Norm recalculation: skip conditions",
+       "Office with NormDeviationType=NONE or AV=false.",
+       "1. POST recalculate for office with NormDeviationType=NONE\n"
+       "2. POST recalculate for office with AV=false\n"
+       "3. POST recalculate for employee who started after recalculation month",
+       "No DAYS_ADJUSTMENT events created.\n"
+       "All three conditions must be met:\n"
+       "1. NormDeviationType != NONE\n"
+       "2. isAdvanceVacation == true\n"
+       "3. Employee started before recalculation month.",
+       "Medium", "Negative",
+       "REQ-norm-recalculation", "AvailableDaysRecalculationServiceImpl"),
+
+    tc("TC-ACC-055",
+       "BUG: Norm recalculation double comparison (== 0) unreliable",
+       "Employee with reported hours very close to personalNorm.",
+       "1. Set reported hours = personalNorm (e.g., both 160.0)\n"
+       "2. Trigger recalculation\n"
+       "3. Check if recalculation is skipped",
+       "Code uses: if (difference == 0) skip recalculation.\n"
+       "BUG: double equality comparison. If difference is 1e-15 due to\n"
+       "floating point, recalculation runs for effectively-zero difference.\n"
+       "daysDelta = 1e-15 / 8 ≈ 0 but may create spurious events.",
+       "Medium", "Bug verification",
+       "BUG-DAYS-3", "AvailableDaysRecalculationServiceImpl.recalculateDays",
+       "Design issue: should use epsilon comparison or BigDecimal"),
+
+    tc("TC-ACC-056",
+       "Recalculation reverse on period reopen",
+       "Approve period advanced, norm recalculation ran, then period reopened (reverted).",
+       "1. Advance approve period → norm recalculation runs, saves ConfirmationPeriodDays\n"
+       "2. Revert approve period (move backward)\n"
+       "3. Verify days restored from ConfirmationPeriodDays\n"
+       "4. Verify MonthlyRecalculationReverseEvent published",
+       "Days restored to pre-recalculation values.\n"
+       "ConfirmationPeriodDays records deleted after restore.\n"
+       "MonthlyRecalculationReverseEvent published if delta != 0.",
+       "High", "Functional",
+       "REQ-norm-recalculation", "AvailableDaysRecalculationServiceImpl.recalculationReverse"),
+
+    tc("TC-ACC-057",
+       "Days grouped by years breakdown",
+       "Employee with multi-year vacation day balances.",
+       "1. GET /api/vacation/v1/vacationdays/{login}/years\n"
+       "2. Verify yearly breakdown",
+       "Returns array: [{year: 2025, days: 6}, {year: 2026, days: 24}, ...].\n"
+       "Shows how days are distributed across accrual years.\n"
+       "Sum of yearly days = total availableDays.",
+       "Medium", "Functional",
+       "REQ-day-correction", "VacationDaysController"),
+
+    tc("TC-ACC-058",
+       "Days summary timeline: accrued vs used totals",
+       "Employee with vacation history.",
+       "1. GET /api/vacation/v1/timelines/days-summary/{login}\n"
+       "2. Verify totalAccruedDays, totalUsedDays, totalAdministrativeDays",
+       "Returns complete day accounting summary.\n"
+       "totalAccruedDays: all accrued days across years.\n"
+       "totalUsedDays: days consumed by approved/paid vacations.\n"
+       "totalAdministrativeDays: admin-type days used.",
+       "Medium", "Functional",
+       "REQ-day-correction", "TimelineController"),
+
+    tc("TC-ACC-059",
+       "Probation limit: 3-month restriction on new employees",
+       "Employee started less than 3 months ago.",
+       "1. Check if employee can create regular vacation\n"
+       "2. Calculate available days with DaysLimitationService",
+       "Within first 3 months: vacation days limited to 0 (hardcoded).\n"
+       "Limit: List.of(new Limit(3, BigDecimal.valueOf(0))).\n"
+       "Uses FirstWorkingDayCalculator.calculateVeryFirstDay().\n"
+       "After 3 months: normal accrual rules apply.",
+       "Medium", "Boundary",
+       "REQ-day-correction", "DaysLimitationService",
+       "Design issue: hardcoded 3-month/0-day, not configurable"),
+
+    tc("TC-ACC-060",
+       "Cross-year balance redistribution (FIFO)",
+       "Employee with days in multiple years: 2024=5, 2025=10, 2026=24.",
+       "1. Create vacation consuming 30 days\n"
+       "2. Verify day deduction order",
+       "Days deducted oldest-first (FIFO):\n"
+       "2024: 5→0, 2025: 10→0, 2026: 24→9.\n"
+       "VacationDaysDistributor handles distribution.\n"
+       "Non-AV: oldest first. AV: same for positive, current year can go negative.",
+       "High", "Functional",
+       "REQ-day-correction", "VacationDaysDistributor"),
+
+    tc("TC-ACC-061",
+       "Annual accruals cron job: new year day creation",
+       "Employee active on January 1st.",
+       "1. Trigger AnnualAccrualsTask (cron: Jan 1 00:00 NSK)\n"
+       "2. Verify new year's vacation day accrual entry created",
+       "Publishes EmployeeNewYearEvent for each active employee.\n"
+       "Event handlers create new accrual entries for the new year.\n"
+       "ShedLock-protected: AnnualAccrualsTask.\n"
+       "Last run: 2025-12-31 17:00 UTC.",
+       "Medium", "Functional",
+       "REQ-day-correction", "AnnualAccrualsTask",
+       "Runs once per year, verified in ShedLock"),
+]
+
+# ── TS-ACC-Views (Accounting Views & Notifications) ──────────
+
+TS_ACC_VIEWS = [
+    tc("TC-ACC-062",
+       "Salary page: employee search and filter",
+       "Logged in as chief accountant/accountant. Navigate to /admin/salary.",
+       "1. Search by employee name\n"
+       "2. Filter by salary office\n"
+       "3. Set date range\n"
+       "4. Toggle 'Show only leaving employees'",
+       "Search: keyboard layout auto-correction (RU↔EN via SuggestionMappingUtil.correctLayout).\n"
+       "SQL LIKE wrapping for employee search.\n"
+       "Filter: salary office dropdown limits to accountant's assigned offices.\n"
+       "Date range: period start/end pickers.\n"
+       "Toggle: shows only employees with upcoming dismissal.",
+       "Medium", "Functional",
+       "REQ-accounting-views", "TaskReportAccountingServiceImpl, Salary page"),
+
+    tc("TC-ACC-063",
+       "Salary page: individual manager notification",
+       "Unapproved reports exist for a manager.",
+       "1. Navigate to /admin/salary\n"
+       "2. Find row with unapproved hours\n"
+       "3. Click envelope icon on that row\n"
+       "4. Verify notification sent",
+       "Email notification sent to the manager about unapproved reports.\n"
+       "Envelope icon visible per row.\n"
+       "Manager name shown in 'Managers who haven't confirmed' column.",
+       "Medium", "Functional",
+       "REQ-accounting-notifications", "TaskReportAccountingServiceImpl"),
+
+    tc("TC-ACC-064",
+       "Salary page: 'Notify all managers' bulk notification",
+       "Multiple managers have unapproved reports.",
+       "1. Navigate to /admin/salary\n"
+       "2. Click 'Notify all managers' button\n"
+       "3. Verify all affected managers notified",
+       "Bulk notification sent to all managers with unapproved reports.\n"
+       "Uses notifyManagers() method.\n"
+       "Permission: ADMIN, CHIEF_ACCOUNTANT, or ACCOUNTANT.",
+       "High", "Functional",
+       "REQ-accounting-notifications", "TaskReportAccountingServiceImpl.notifyManagers",
+       "Design issue: VIEW_ALL role cannot NOTIFY — permission gap"),
+
+    tc("TC-ACC-065",
+       "Budget notification: create with man-day limit",
+       "Accountant on budget notification page.",
+       "1. POST budget notification with:\n"
+       "   startDate, endDate, projectId, employeeLogin, limit=100, repeatMonthly=false\n"
+       "2. Verify notification created",
+       "HTTP 200. Budget notification created.\n"
+       "DTO: @NotNull startDate/endDate, @ProjectIdExists, @EmployeeLoginExists.\n"
+       "@Min(0) on limit. @NotificationLimit: at least one of limit/limitPercent required.",
+       "Medium", "Functional",
+       "REQ-budget-notifications", "BudgetNotificationAddRequestDTO"),
+
+    tc("TC-ACC-066",
+       "Budget notification: percent mode requires exact month boundaries",
+       "Accountant creating notification.",
+       "1. POST with limitPercent=50, startDate=2026-03-01, endDate=2026-03-31\n"
+       "   (exact month — valid)\n"
+       "2. POST with limitPercent=50, startDate=2026-03-01, endDate=2026-04-15\n"
+       "   (not exact month — invalid)",
+       "Step 1: HTTP 200. Percent mode with exact month boundaries.\n"
+       "Step 2: HTTP 400. @NotificationPeriod validation.\n"
+       "If percent or repeatMonthly → period must be exactly one calendar month.",
+       "Medium", "Validation",
+       "REQ-budget-notifications", "BudgetNotificationAddRequestDTO",
+       "@NotificationPeriod: 1st day to last day of same month"),
+
+    tc("TC-ACC-067",
+       "Budget notification: neither limit nor limitPercent provided",
+       "Accountant creating notification.",
+       "1. POST with no limit and no limitPercent\n"
+       "2. Verify error",
+       "HTTP 400. @NotificationLimit validation.\n"
+       "At least one of limit or limitPercent must be provided.",
+       "Medium", "Validation",
+       "REQ-budget-notifications", "BudgetNotificationAddRequestDTO"),
+
+    tc("TC-ACC-068",
+       "Budget notification scheduler: BudgetNotificationScheduler",
+       "Active budget notifications exist.",
+       "1. Verify scheduler runs (cron: every 30 minutes)\n"
+       "2. Check ShedLock for BudgetNotificationScheduler",
+       "Scheduler checks all active notifications every 30 minutes.\n"
+       "Sends email when budget threshold exceeded.\n"
+       "ShedLock-protected.\n"
+       "Last TM locked_at: 16:30 UTC.",
+       "Medium", "Functional",
+       "REQ-budget-notifications", "BudgetNotificationScheduler",
+       "Verified running in ShedLock on both TM and Stage"),
+
+    tc("TC-ACC-069",
+       "Accounting permission: office scoping for ACCOUNTANT role",
+       "Accountant assigned to office A only.",
+       "1. GET /api/ttt/v1/reports/accounting?officeId={officeB}\n"
+       "2. Verify error",
+       "HTTP 403. TttSecurityException.\n"
+       "ACCOUNTANT restricted to assigned offices.\n"
+       "ADMIN/VIEW_ALL/CHIEF_ACCOUNTANT see all offices.",
+       "High", "Security",
+       "REQ-accounting-permissions", "AccountingPermissionProvider",
+       "Office scoping is accountant-only restriction"),
+
+    tc("TC-ACC-070",
+       "Accounting permission: VIEW_ALL can view but cannot notify",
+       "User with VIEW_ALL permission.",
+       "1. GET /api/ttt/v1/reports/accounting — verify access\n"
+       "2. POST notify managers — verify denied",
+       "GET: allowed (VIEW_ALL in VIEW permissions).\n"
+       "NOTIFY: denied (VIEW_ALL not in NOTIFY permissions).\n"
+       "Design issue: VIEW_ALL can see data but can't trigger notifications.",
+       "Medium", "Security",
+       "REQ-accounting-permissions", "AccountingPermissionProvider",
+       "Known gap: NOTIFY only for ADMIN, CHIEF_ACCOUNTANT, ACCOUNTANT"),
+
+    tc("TC-ACC-071",
+       "Forgotten report notification scheduler",
+       "Employees have not submitted reports.",
+       "1. Verify sendReportsForgotten runs (cron: MON/FRI 16:00 NSK)\n"
+       "2. Verify sendReportsForgottenDelayed runs (cron: daily 16:30 NSK)\n"
+       "3. Check ShedLock entries",
+       "Two schedulers for forgotten reports:\n"
+       "sendReportsForgotten: Monday+Friday 16:00 NSK.\n"
+       "sendReportsForgottenDelayed: daily 16:30 NSK.\n"
+       "Both verified running in ShedLock on TM and Stage.",
+       "Medium", "Functional",
+       "REQ-accounting-notifications", "Report notification schedulers",
+       "85 INVALID emails found on TM — former employees with deactivated mailboxes"),
+
+    tc("TC-ACC-072",
+       "Reports changed notification scheduler",
+       "Employee modified a previously confirmed report.",
+       "1. Verify sendReportsChanged runs (cron: daily 07:50 NSK)\n"
+       "2. Check notification content and recipients",
+       "Scheduler: sendReportsChanged (daily 07:50 NSK, ShedLock-protected).\n"
+       "Notifies managers when employees modify already-confirmed reports.\n"
+       "Verified running: last TM locked_at 00:50 UTC.",
+       "Medium", "Functional",
+       "REQ-accounting-notifications", "Report notification schedulers"),
+
+    tc("TC-ACC-073",
+       "Vacation day correction UI: inline editing",
+       "Navigate to /vacation/days-correction as accountant.",
+       "1. Open /vacation/days-correction\n"
+       "2. Find employee row\n"
+       "3. Click vacation days cell — becomes editable\n"
+       "4. Enter new value and comment\n"
+       "5. Verify correction applied",
+       "Cell becomes editable text field on click.\n"
+       "Comment required (manual state check: comment !== '').\n"
+       "No Yup/Formik — manual React state validation.\n"
+       "Only comment validated client-side; numeric value accepted as-is.",
+       "Medium", "UI",
+       "REQ-day-correction", "CorrectVacationDaysModalContainer",
+       "Frontend: no numeric validation — backend is sole guard"),
+
+    tc("TC-ACC-074",
+       "Events feed dialog: complete history display",
+       "Employee with vacation history.",
+       "1. Navigate to /vacation/days-correction\n"
+       "2. Click events feed button for employee\n"
+       "3. Verify dialog content",
+       "Dialog shows: employee name, annual vacation days left, work dates.\n"
+       "Events table: Date, Event, Paid/Unpaid days allowance/used.\n"
+       "Total row at bottom. Shows DAYS_ADJUSTMENT, VACATION_APPROVED, VACATION_PAID events.",
+       "Medium", "UI",
+       "REQ-day-correction", "Days correction page"),
+
+    tc("TC-ACC-075",
+       "Show dismissed employees toggle",
+       "Some employees in the office are dismissed.",
+       "1. Navigate to /vacation/days-correction\n"
+       "2. Toggle 'Show dismissed employees'\n"
+       "3. Verify dismissed employees appear/disappear",
+       "Toggle shows/hides dismissed employees in the list.\n"
+       "Default: dismissed employees hidden.\n"
+       "When shown: appear with same columns, may have zero balances.",
+       "Low", "UI",
+       "REQ-accounting-views", "Days correction page"),
+]
+
+# ── TS-ACC-SickLeave (Sick Leave Accounting Status) ──────────
+
+TS_ACC_SICKLEAVE = [
+    tc("TC-ACC-076",
+       "Sick leave accounting: status workflow New → Pending → Paid",
+       "Sick leave in database with accounting status = New.\n"
+       "Logged in as accountant.",
+       "1. Navigate to /accounting/sick-leaves\n"
+       "2. Find sick leave with status 'New'\n"
+       "3. Change status dropdown to 'Pending'\n"
+       "4. Change status dropdown to 'Paid'\n"
+       "5. Verify final status",
+       "Status transitions: New → Pending → Paid.\n"
+       "Each transition saves to database.\n"
+       "Dropdown allows forward transitions only.",
+       "High", "Functional",
+       "REQ-sick-leave-accounting", "Sick leave accounting page"),
+
+    tc("TC-ACC-077",
+       "Sick leave accounting: reject from Pending",
+       "Sick leave with accounting status = Pending.",
+       "1. Find sick leave with status 'Pending'\n"
+       "2. Change status to 'Rejected'\n"
+       "3. Verify terminal state",
+       "Status → Rejected (terminal state).\n"
+       "No further status changes allowed for rejected sick leaves.\n"
+       "Rejected sick leaves remain visible in table.",
+       "High", "Functional",
+       "REQ-sick-leave-accounting", "Sick leave accounting page"),
+
+    tc("TC-ACC-078",
+       "Sick leave accounting: overdue state display",
+       "Sick leave with end date in the past, not yet processed.",
+       "1. Navigate to /accounting/sick-leaves\n"
+       "2. Filter by State: Overdue\n"
+       "3. Verify overdue highlighting",
+       "Overdue sick leaves highlighted in red.\n"
+       "State=Overdue for unprocessed past sick leaves.\n"
+       "Count of overdue sick leaves available via GET /open-overdue-sick-leave-count.",
+       "Medium", "UI",
+       "REQ-sick-leave-accounting", "Sick leave accounting page"),
+
+    tc("TC-ACC-079",
+       "Sick leave accounting: deleted state blocks status changes",
+       "Deleted sick leave in the table.",
+       "1. Find sick leave with State='Deleted'\n"
+       "2. Attempt to change status dropdown\n"
+       "3. Attempt edit/delete actions",
+       "No status dropdown available for deleted sick leaves.\n"
+       "No edit/delete actions available.\n"
+       "Deleted entries are read-only in accounting view.",
+       "Medium", "Negative",
+       "REQ-sick-leave-accounting", "Sick leave accounting page"),
+
+    tc("TC-ACC-080",
+       "Sick leave accounting: filter and sort",
+       "Multiple sick leaves in various states.",
+       "1. Filter by salary office\n"
+       "2. Filter by state (Planned/Overdue/Deleted/Ended)\n"
+       "3. Sort by dates (default: descending)",
+       "Salary office filter: dropdown with all offices.\n"
+       "State filter: Planned, Overdue, Deleted, Ended.\n"
+       "Date sort: descending by default.\n"
+       "18 pages of data observed in testing.",
+       "Low", "Functional",
+       "REQ-sick-leave-accounting", "Sick leave accounting page"),
+
+    tc("TC-ACC-081",
+       "Sick leave accounting: download attachment",
+       "Sick leave with uploaded sick note attachment.",
+       "1. Find sick leave with attachment\n"
+       "2. Click download action button\n"
+       "3. Verify file downloads",
+       "Attachment (sick note scan) downloads.\n"
+       "Actions column shows: edit, download, delete buttons (2-3 depending on state).\n"
+       "Download action available for all non-deleted sick leaves with attachments.",
+       "Low", "Functional",
+       "REQ-sick-leave-accounting", "Sick leave accounting page"),
+]
+
+# ── TS-ACC-APIErrors (API Errors, Security & Edge Cases) ─────
+
+TS_ACC_APIERRORS = [
+    tc("TC-ACC-082",
+       "Stack trace leakage: invalid date format in period PATCH",
+       "Valid accountant auth.",
+       "1. PATCH period with {\"start\": \"not-a-date\"}\n"
+       "2. PATCH period with {\"start\": \"2026-13-01\"} (invalid month)\n"
+       "3. Verify response bodies",
+       "BUG: Full Spring exception class and conversion details in response body.\n"
+       "Should return 400 with sanitized error message.\n"
+       "Security risk: exposes internal framework details.",
+       "High", "Security",
+       "BUG-SEC-1", "OfficePeriodController",
+       "Also applies to payment date endpoint"),
+
+    tc("TC-ACC-083",
+       "Stack trace leakage: invalid payment date format",
+       "Valid auth.",
+       "1. GET /api/vacation/v1/paymentdates?vacationStartDate=2026-13-01&vacationEndDate=2026-06-01\n"
+       "2. Verify response body",
+       "BUG: Full Spring conversion exception in response.\n"
+       "Should return 400 with sanitized message.",
+       "High", "Security",
+       "BUG-SEC-2", "VacationPaymentController",
+       "Confirmed in live testing — invalid date leaks stack trace"),
+
+    tc("TC-ACC-084",
+       "Error response inconsistency: TTT vs Vacation service",
+       "Various error scenarios across both services.",
+       "1. Trigger 400 error in TTT service (e.g., invalid report)\n"
+       "2. Trigger 400 error in Vacation service (e.g., invalid payment)\n"
+       "3. Compare error response structures",
+       "TTT: {errorCode, message, ...} structure.\n"
+       "Vacation: different error format.\n"
+       "Inconsistent error envelopes across services.\n"
+       "Frontend must handle both formats.",
+       "Medium", "Consistency",
+       "REQ-api-standards", "Cross-service"),
+
+    tc("TC-ACC-085",
+       "BUG: status=ALL causes 500 NPE",
+       "Valid accountant auth.",
+       "1. GET /api/ttt/v1/reports/accounting?status=ALL\n"
+       "2. Verify response",
+       "BUG: HTTP 500 NullPointerException.\n"
+       "Some status enum values cause NPE in query construction.\n"
+       "Should either accept ALL as valid filter or return 400.",
+       "High", "Bug verification",
+       "BUG-API-1", "TaskReportAccountingServiceImpl",
+       "Discovered in S52 live testing"),
+
+    tc("TC-ACC-086",
+       "Pagination inconsistency: v1 vs v2 endpoints",
+       "Large dataset in accounting view.",
+       "1. GET v1 accounting endpoint — check pagination format\n"
+       "2. GET v2 equivalent — check pagination format\n"
+       "3. Compare page/size/total conventions",
+       "v1 and v2 use different pagination conventions.\n"
+       "Inconsistent page numbering (0-based vs 1-based) or response structure.\n"
+       "Frontend must handle both versions.",
+       "Medium", "Consistency",
+       "REQ-api-standards", "Accounting controllers"),
+
+    tc("TC-ACC-087",
+       "Accounting page: no pagination on vacation days list",
+       "Many employees in office.",
+       "1. GET /api/vacation/v1/vacationdays\n"
+       "2. Check if pagination is supported\n"
+       "3. Count returned records",
+       "No pagination support on vacation days endpoint.\n"
+       "Returns all employees at once.\n"
+       "Performance concern for offices with many employees.\n"
+       "UI: all rows loaded at once.",
+       "Low", "Performance",
+       "REQ-accounting-views", "VacationDaysController"),
+
+    tc("TC-ACC-088",
+       "Statistics search: per-element login validation",
+       "Valid date range.",
+       "1. POST /api/ttt/v1/statistics with:\n"
+       "   {startDate, endDate, employeesLogins: [\"valid_login\", \"invalid_login\"]}\n"
+       "2. Verify error handling",
+       "Each login in employeesLogins validated individually via @EmployeeLoginExists.\n"
+       "One invalid login should fail the entire request (400).\n"
+       "Valid request returns statistics for specified employees.",
+       "Medium", "Validation",
+       "REQ-statistics", "StatisticRequestDTO"),
+
+    tc("TC-ACC-089",
+       "GET /v1/reports/accounting: 403 with valid VIEW_ALL permission",
+       "User with VIEW_ALL role but no ACCOUNTANT/ADMIN role.",
+       "1. Authenticate as user with VIEW_ALL only\n"
+       "2. GET /api/ttt/v1/reports/accounting\n"
+       "3. Verify access",
+       "Should return 200 — VIEW_ALL is in VIEW permission set.\n"
+       "If 403 returned despite VIEW_ALL: bug in permission check.\n"
+       "Permission model: VIEW = ADMIN, VIEW_ALL, ACCOUNTANT, CHIEF_ACCOUNTANT.",
+       "High", "Security",
+       "REQ-accounting-permissions", "AccountingPermissionProvider",
+       "Verify VIEW_ALL role actually grants access"),
+
+    tc("TC-ACC-090",
+       "Accounting search: RU↔EN keyboard layout auto-correction",
+       "Search field on salary page.",
+       "1. Type employee name with wrong keyboard layout\n"
+       "   (e.g., 'Bdfyjd' instead of 'Иванов' in RU layout)\n"
+       "2. Verify search still finds the employee",
+       "SuggestionMappingUtil.correctLayout handles RU↔EN keyboard mapping.\n"
+       "Both layouts searched simultaneously.\n"
+       "Employee found regardless of keyboard layout error.",
+       "Low", "Functional",
+       "REQ-accounting-views", "TaskReportAccountingServiceImpl",
+       "Same pattern used across TTT search fields"),
+
+    tc("TC-ACC-091",
+       "Payment page: month quick tabs navigation",
+       "Navigate to /vacation/payment.",
+       "1. Verify month tabs displayed (Jan-May 2026)\n"
+       "2. Click different month tabs\n"
+       "3. Verify table updates to show that month's payments",
+       "Quick tabs allow fast month switching.\n"
+       "Payments month picker for arbitrary month selection.\n"
+       "Table filters by selected payment month.",
+       "Low", "UI",
+       "REQ-vacation-payment", "Payment page"),
+
+    tc("TC-ACC-092",
+       "Period UI: edit dialog with month pickers",
+       "Navigate to /admin/offices as accountant.",
+       "1. Click Edit on a salary office row\n"
+       "2. Verify dialog shows two month pickers\n"
+       "3. Change report period\n"
+       "4. Change approve period\n"
+       "5. Click Edit button to save",
+       "Edit dialog: two month pickers for Report and Approve periods.\n"
+       "Frontend validates: reportDate required, approveDate required (Yup schema).\n"
+       "Gap: Frontend sends two separate dates; backend uses one 'start' field per endpoint.\n"
+       "Cancel/Edit buttons.",
+       "Medium", "UI",
+       "REQ-period-management", "OfficeValidationSchema.js, /admin/offices"),
+]
+
+
+# =====================================================================
+# SUITE METADATA
+# =====================================================================
+
+SUITES = [
+    ("TS-ACC-Periods", "Period Management", TS_ACC_PERIODS,
+     "Report/approve period CRUD, validation rules, extended periods, events, caching"),
+    ("TS-ACC-Payment", "Vacation Payment", TS_ACC_PAYMENT,
+     "Pay vacation, auto-payment, payment validation, day redistribution, known bugs"),
+    ("TS-ACC-DayCorrection", "Day Correction & Recalculation", TS_ACC_DAYCORRECTION,
+     "Manual correction, bulk recalculate, norm-based recalculation, distribution, probation"),
+    ("TS-ACC-Views", "Accounting Views & Notifications", TS_ACC_VIEWS,
+     "Salary page, budget notifications, correction UI, events feed, notification schedulers"),
+    ("TS-ACC-SickLeave", "Sick Leave Accounting", TS_ACC_SICKLEAVE,
+     "Accounting status workflow, overdue state, filters, attachments"),
+    ("TS-ACC-APIErrors", "API Errors & Security", TS_ACC_APIERRORS,
+     "Stack trace leakage, error consistency, permissions, search, pagination"),
+]
+
+
+# =====================================================================
+# RISK DATA
+# =====================================================================
+
+RISKS = [
+    ("Period advance cascading effects",
+     "Approve period advance triggers auto-reject, norm recalculation, and RabbitMQ events. "
+     "Failure in any downstream step can leave system in inconsistent state.",
+     "High", "High", "Critical",
+     "Test with real data in TM. Verify auto-reject + recalculation + events all fire."),
+    ("VacationStatusUpdateJob 2-hour orphan window",
+     "BUG-PAY-5: Entries older than 2h are permanently orphaned. "
+     "6 stuck NEW_FOR_PAID entries found in Saturn office.",
+     "High", "High", "Critical",
+     "Monitor status_updates table. Create bug ticket for retry mechanism."),
+    ("Payment type misalignment allowed",
+     "BUG-PAY-1: ADMINISTRATIVE vacation can be paid as REGULAR. "
+     "Incorrect accounting classification.",
+     "Medium", "High", "High",
+     "Test payment with mismatched type. Verify DB records."),
+    ("DB/API representation inconsistency (ADMIN vacations)",
+     "BUG-PAY-6: DB stores admin days in regular_days column, API transposes. "
+     "Reports using DB queries will show wrong breakdown.",
+     "Medium", "High", "High",
+     "Compare DB and API for ADMINISTRATIVE vacations."),
+    ("pastPeriodsAvailableDays drift on corrections",
+     "BUG-DAYS-1: Net-zero correction cycles cause irreversible drift. "
+     "Sub-component breakdown becomes incorrect.",
+     "Medium", "Medium", "High",
+     "Run multiple +/- corrections. Check pastPeriodsAvailableDays after."),
+    ("Approve period accepts non-first-day-of-month",
+     "BUG-PERIOD-1: Missing validation. Report period has it, approve does not.",
+     "High", "Medium", "High",
+     "PATCH approve with mid-month date. Should reject but doesn't."),
+    ("NPE on null period PATCH body",
+     "BUG-PERIOD-2: Null start causes 500 with stack trace leakage.",
+     "Medium", "High", "High",
+     "Send empty body PATCH. Should get 400, gets 500."),
+    ("Double arithmetic for financial calculations",
+     "BUG-DAYS-2: double used for day calculations. Floating point risk.",
+     "Low", "High", "Medium",
+     "Test with values near floating point boundaries."),
+    ("Norm recalculation double equality check",
+     "BUG-DAYS-3: difference == 0 with double. May skip or spuriously trigger.",
+     "Low", "Medium", "Medium",
+     "Test with very small norm differences."),
+    ("Invalid office ID returns 200 with defaults",
+     "BUG-PERIOD-4: Nonexistent office returns default period instead of 404.",
+     "Medium", "Medium", "Medium",
+     "GET period for office ID 99999. Should 404."),
+    ("Extended period blocks entire office approve change",
+     "Any employee with extension blocks all approve changes for the office.",
+     "Medium", "Medium", "Medium",
+     "Grant extension to one employee, try to advance approve period."),
+    ("AUTHENTICATED_USER on period PATCH",
+     "Controller allows any authenticated user, relies on service-level check. "
+     "If service-level guard has a bug, all users can modify periods.",
+     "Low", "High", "Medium",
+     "Test period PATCH as non-accountant employee."),
+    ("Payment dates accepts start > end",
+     "BUG-PAY-3: No date order validation on payment dates endpoint.",
+     "Medium", "Low", "Medium",
+     "Send reversed dates. Should reject but doesn't."),
+    ("Stack trace leakage on invalid dates",
+     "BUG-SEC-1/2: Full Spring exception in response for invalid date formats.",
+     "Medium", "Medium", "Medium",
+     "Send invalid date formats. Check for framework details in response."),
+    ("status=ALL causes 500 NPE in accounting",
+     "BUG-API-1: Specific enum value triggers NPE.",
+     "Medium", "Medium", "Medium",
+     "GET accounting with status=ALL."),
+]
+
+
+# =====================================================================
+# WORKBOOK GENERATION
+# =====================================================================
+
+def build_plan_overview(ws, suites_meta):
+    ws.sheet_properties.tabColor = TAB_COLOR_PLAN
+    ws.cell(row=1, column=1, value="Accounting Test Plan").font = FONT_TITLE
+    ws.cell(row=2, column=1,
+            value=f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')} | "
+                  "Phase B Session 61 | Branch: release/2.1").font = FONT_SMALL
+
+    # Scope
+    ws.cell(row=4, column=1, value="Scope & Objectives").font = FONT_SECTION
+    ws.cell(row=4, column=1).fill = FILL_SECTION
+    scope_text = (
+        "Comprehensive test coverage for TTT accounting operations:\n"
+        "- Report/approve period management (dual period system, validation, events)\n"
+        "- Vacation payment flow (APPROVED→PAID, auto-payment, write locks)\n"
+        "- Vacation day correction (manual adjustment, bulk recalculation, norm-based)\n"
+        "- Accounting views and notifications (salary page, budget alerts, schedulers)\n"
+        "- Sick leave accounting status workflow (New→Pending→Paid/Rejected)\n"
+        "- API errors, security, and edge cases (stack traces, permissions, consistency)\n\n"
+        "Test data generation:\n"
+        "- Period tests: use offices with known period settings on timemachine\n"
+        "- Payment tests: create APPROVED vacations via API, then test payment flow\n"
+        "- Day correction: use employees in AV=true and AV=false offices\n"
+        "- Environment: timemachine (primary), qa-1 (secondary), stage (comparison)"
+    )
+    ws.cell(row=5, column=1, value=scope_text).font = FONT_BODY
+    ws.cell(row=5, column=1).alignment = ALIGN_LEFT
+
+    # Known bugs covered
+    ws.cell(row=7, column=1, value="Known Bugs Covered").font = FONT_SECTION
+    ws.cell(row=7, column=1).fill = FILL_SECTION
+    bugs = (
+        "BUG-PERIOD-1: Approve period accepts non-first-day-of-month\n"
+        "BUG-PERIOD-2: NPE on null start in PATCH body\n"
+        "BUG-PERIOD-3: AUTHENTICATED_USER permission on PATCH (design issue)\n"
+        "BUG-PERIOD-4: Invalid office ID returns 200 with default data\n"
+        "BUG-PAY-1: Payment type misalignment allowed\n"
+        "BUG-PAY-2: Same error code for 5 different payment failures\n"
+        "BUG-PAY-3: Payment dates accepts start > end\n"
+        "BUG-PAY-4: Available paid days accepts negative newDays\n"
+        "BUG-PAY-5: VacationStatusUpdateJob 2-hour orphan window (Critical)\n"
+        "BUG-PAY-6: DB/API data representation inconsistency for ADMIN vacations\n"
+        "BUG-DAYS-1: pastPeriodsAvailableDays drift on net-zero corrections\n"
+        "BUG-DAYS-2: double arithmetic for financial day calculations\n"
+        "BUG-DAYS-3: Norm recalculation double comparison (== 0) unreliable\n"
+        "BUG-SEC-1: Stack trace leakage on invalid period date format\n"
+        "BUG-SEC-2: Stack trace leakage on invalid payment date format\n"
+        "BUG-API-1: status=ALL causes 500 NPE in accounting"
+    )
+    ws.cell(row=8, column=1, value=bugs).font = FONT_BODY
+    ws.cell(row=8, column=1).alignment = ALIGN_LEFT
+
+    # Suite links
+    ws.cell(row=10, column=1, value="Test Suites").font = FONT_SECTION
+    ws.cell(row=10, column=1).fill = FILL_SECTION
+    headers = ["Suite", "Focus", "Cases", "Link"]
+    for col, h in enumerate(headers, 1):
+        cell = ws.cell(row=11, column=col, value=h)
+        cell.font = FONT_HEADER
+        cell.fill = FILL_GREEN_HEADER
+        cell.alignment = ALIGN_CENTER
+        cell.border = THIN_BORDER
+
+    for i, (tab_name, display_name, cases, description) in enumerate(suites_meta):
+        row = 12 + i
+        fill = FILL_ROW_EVEN if i % 2 == 0 else FILL_ROW_ODD
+        write_row(ws, row, [tab_name, description, len(cases)], fill=fill)
+        link_cell = ws.cell(row=row, column=4)
+        link_cell.value = f"Go to {display_name}"
+        link_cell.font = FONT_LINK_BOLD
+        link_cell.hyperlink = f"#'{tab_name}'!A1"
+        link_cell.border = THIN_BORDER
+        if fill:
+            link_cell.fill = fill
+
+    total_row = 12 + len(suites_meta)
+    total_cases = sum(len(s[2]) for s in suites_meta)
+    ws.cell(row=total_row, column=1, value="TOTAL").font = FONT_SECTION
+    ws.cell(row=total_row, column=3, value=total_cases).font = FONT_SECTION
+    for col in range(1, 5):
+        ws.cell(row=total_row, column=col).border = THIN_BORDER
+
+    # Column widths
+    ws.column_dimensions["A"].width = 22
+    ws.column_dimensions["B"].width = 80
+    ws.column_dimensions["C"].width = 10
+    ws.column_dimensions["D"].width = 25
+
+
+def build_feature_matrix(ws, suites_meta):
+    ws.sheet_properties.tabColor = TAB_COLOR_PLAN
+    ws.cell(row=1, column=1, value="Feature × Test Type Matrix").font = FONT_TITLE
+    add_back_link(ws, row=2)
+
+    types = ["Functional", "Validation", "Boundary", "Negative", "Bug verification",
+             "Security", "Integration", "Concurrency", "UI", "Performance", "Consistency"]
 
     # Headers
-    for c, h in enumerate(TC_HEADERS, 1):
-        ws.cell(row=5, column=c, value=h)
-    style_header_row(ws, 5, len(TC_HEADERS))
+    headers = ["Feature Area"] + types + ["Total", "Link"]
+    for col, h in enumerate(headers, 1):
+        cell = ws.cell(row=4, column=col, value=h)
+        cell.font = FONT_HEADER
+        cell.fill = FILL_HEADER
+        cell.alignment = ALIGN_CENTER
+        cell.border = THIN_BORDER
 
-    # Cases
-    for idx, case in enumerate(cases):
-        r = 6 + idx
-        for c, v in enumerate(case, 1):
-            ws.cell(row=r, column=c, value=v)
-        style_data_row(ws, r, len(TC_HEADERS), idx)
+    for i, (tab_name, display_name, cases, _) in enumerate(suites_meta):
+        row = 5 + i
+        fill = FILL_ROW_EVEN if i % 2 == 0 else FILL_ROW_ODD
+        counts = {}
+        for c in cases:
+            t = c["type"]
+            counts[t] = counts.get(t, 0) + 1
 
-    set_col_widths(ws, TC_WIDTHS)
-    ws.auto_filter.ref = f"A5:{get_column_letter(len(TC_HEADERS))}{5 + len(cases)}"
+        values = [display_name] + [counts.get(t, 0) or "" for t in types] + [len(cases)]
+        write_row(ws, row, values, fill=fill)
 
-wb.save(OUTPUT)
+        link_cell = ws.cell(row=row, column=len(headers))
+        link_cell.value = f"→ {tab_name}"
+        link_cell.font = FONT_LINK
+        link_cell.hyperlink = f"#'{tab_name}'!A1"
+        link_cell.border = THIN_BORDER
 
-total_cases = sum(len(cases) for _, _, cases in SUITES)
-print(f"Generated {OUTPUT}")
-print(f"Total: {len(SUITES)} test suites, {total_cases} test cases")
-print(f"Tabs: Plan Overview, Feature Matrix, Risk Assessment + {len(SUITES)} TS- tabs")
-for sn, st, cases in SUITES:
-    print(f"  {sn}: {len(cases)} cases — {st}")
+    # Column widths
+    ws.column_dimensions["A"].width = 30
+    for col in range(2, len(headers) + 1):
+        ws.column_dimensions[get_column_letter(col)].width = 14
+
+
+def build_risk_assessment(ws, risks):
+    ws.sheet_properties.tabColor = TAB_COLOR_PLAN
+    ws.cell(row=1, column=1, value="Risk Assessment").font = FONT_TITLE
+    add_back_link(ws, row=2)
+
+    headers = ["Risk", "Description", "Likelihood", "Impact", "Severity", "Mitigation / Test Focus"]
+    for col, h in enumerate(headers, 1):
+        cell = ws.cell(row=4, column=col, value=h)
+        cell.font = FONT_HEADER
+        cell.fill = FILL_HEADER
+        cell.alignment = ALIGN_CENTER
+        cell.border = THIN_BORDER
+
+    severity_fills = {"Critical": FILL_RISK_HIGH, "High": FILL_RISK_HIGH,
+                      "Medium": FILL_RISK_MED, "Low": FILL_RISK_LOW}
+
+    for i, (risk, desc, likelihood, impact, severity, mitigation) in enumerate(risks):
+        row = 5 + i
+        fill = severity_fills.get(severity, FILL_ROW_ODD)
+        write_row(ws, row, [risk, desc, likelihood, impact, severity, mitigation], fill=fill)
+
+    add_autofilter(ws, 4, len(headers))
+    ws.column_dimensions["A"].width = 40
+    ws.column_dimensions["B"].width = 60
+    ws.column_dimensions["C"].width = 12
+    ws.column_dimensions["D"].width = 12
+    ws.column_dimensions["E"].width = 12
+    ws.column_dimensions["F"].width = 55
+
+
+def main():
+    wb = openpyxl.Workbook()
+
+    # Plan Overview
+    ws_plan = wb.active
+    ws_plan.title = "Plan Overview"
+    build_plan_overview(ws_plan, SUITES)
+
+    # Feature Matrix
+    ws_matrix = wb.create_sheet("Feature Matrix")
+    build_feature_matrix(ws_matrix, SUITES)
+
+    # Risk Assessment
+    ws_risk = wb.create_sheet("Risk Assessment")
+    build_risk_assessment(ws_risk, RISKS)
+
+    # Test Suite tabs
+    total = 0
+    for tab_name, display_name, cases, _ in SUITES:
+        ws_ts = wb.create_sheet(tab_name)
+        ws_ts.sheet_properties.tabColor = TAB_COLOR_TS
+        count = write_ts_tab(ws_ts, display_name, cases)
+        total += count
+        print(f"  {tab_name}: {count} cases")
+
+    output_path = "/home/v/Dev/ttt-expert-v1/expert-system/output/accounting/accounting.xlsx"
+    wb.save(output_path)
+    print(f"\nSaved: {output_path}")
+    print(f"Total: {total} test cases across {len(SUITES)} suites")
+    print(f"Tabs: Plan Overview, Feature Matrix, Risk Assessment + {len(SUITES)} TS- tabs")
+    print(f"Risks: {len(RISKS)}")
+
+
+if __name__ == "__main__":
+    main()

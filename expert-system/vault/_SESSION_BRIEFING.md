@@ -1,81 +1,75 @@
----
-type: meta
-tags:
-  - session
-  - briefing
-created: '2026-03-12'
-updated: '2026-03-15'
-status: active
----
 # Session Briefing
 
-## Current Session: 52
-**Timestamp**: 2026-03-15T15:30:00Z
+## Current Session: 64 (COMPLETED)
+**Timestamp**: 2026-03-15T18:00:00Z
 **Phase**: generation (Phase B)
 **Mode**: full (unattended)
+**Type**: Maintenance session (every 5th, per §9.4)
 
-## Session 52 Summary
+## Session 64 Summary
+Maintenance audit + security workbook regeneration from legacy S51 format to unified format.
 
-Generated Accounting supplements test plan and test cases (82 cases) — fifth Phase B module.
+### Maintenance Audit (§9.4) — ALL CLEAN
+- **Vault health**: 167 notes, no broken wikilinks, no draft/stale notes
+- **Superseded notes**: 1 properly superseded (statistics-service-deep-dive → frontend-statistics-module)
+- **SQLite integrity**: No duplicate entries, all tables consistent
+- **Cross-references**: All wikilinks resolve, all module_health vault_note refs valid
+- **Agenda**: Refined — security regen moved from P3 backlog to completed
 
-### 1. Accounting Supplements — Generated
+### Security Workbook Regeneration — COMPLETED
+- **Output**: `expert-system/output/security/security.xlsx`
+- **Total**: 92 test cases across 8 test suites (all preserved from S51)
+- **Workbook tabs**: Plan Overview, Feature Matrix, Risk Assessment + 8 TS- tabs
+- **Risks assessed**: 13
+- **Format**: Upgraded from legacy S51 tuple-based format to unified dict-based format
 
-**accounting.xlsx** (11 tabs, unified workbook):
+| Suite | Cases | Focus |
+|-------|-------|-------|
+| TS-SEC-JWTAuth | 12 | JWT lifecycle, token validation, session management |
+| TS-SEC-APIToken | 12 | API key auth, header validation, scope restrictions |
+| TS-SEC-RoleAccess | 14 | Role-based access control, 6 roles, page visibility |
+| TS-SEC-EndpointPerm | 13 | Endpoint authorization, @PreAuthorize patterns |
+| TS-SEC-SoDuties | 9 | Separation of duties, cross-role conflicts |
+| TS-SEC-InfoLeak | 10 | Information disclosure, error messages, headers |
+| TS-SEC-ObjPerm | 9 | Object-level permissions, IDOR, data isolation |
+| TS-SEC-InputVal | 13 | Input validation, injection, XSS, boundary values |
 
-**Plan tabs (3):**
-- Plan Overview: scope, objectives, approach, gap analysis vs 127 existing Qase cases, test data strategy, 11 known bugs referenced
-- Feature Matrix: 8 feature areas × 7 test types, 82 total cases
-- Risk Assessment: 13 risks (2 Critical, 5 High, 5 Medium, 1 Low)
+**Key changes from legacy format:**
+- Tuple-based test cases → dict-based with tc() factory
+- 3-tuple SUITES → 4-tuple with descriptions
+- Hardcoded plan overview → dynamic generation with security-specific content
+- Old style constants → unified FONT_HEADER/FILL_HEADER naming
 
-**Test suite tabs (8, 82 cases):**
-| Sheet | Cases | Priority C/H/M/L |
-|-------|-------|-------------------|
-| TS-ACC-PeriodEdge | 14 | 2/5/5/0 |
-| TS-ACC-PeriodEffects | 11 | 2/5/4/0 |
-| TS-ACC-PayValidation | 13 | 1/3/7/1 |
-| TS-ACC-PayLifecycle | 10 | 2/3/3/1 |
-| TS-ACC-DayCorrect | 10 | 3/1/5/1 |
-| TS-ACC-Notifications | 8 | 0/3/5/0 |
-| TS-ACC-SickLeaveAcct | 7 | 0/2/4/1 |
-| TS-ACC-APIErrors | 9 | 0/3/6/0 |
+### SQLite Updates
+- Updated security test_case_tracking: xlsx_file → security/security.xlsx, status → exported
+- Added analysis_runs entry for S64 maintenance + security regeneration
 
-Key gap coverage:
-- 4 period management bugs: missing first-day validation (BUG-PERIOD-1), NPE on null start (BUG-PERIOD-2), stack trace leakage (BUG-PERIOD-3), permission inconsistency (BUG-PERIOD-4)
-- 6 payment bugs: 2-hour orphan window (BUG-PAY-1), type misalignment (BUG-PAY-2), reversed dates (BUG-PAY-3), DB/API inconsistency (BUG-PAY-4), negative newDays (BUG-PAY-5), stack trace leakage (BUG-PAY-6)
-- Cross-service effects: PeriodChangedEvent → auto-reject + vacation recalc via RabbitMQ
-- Payment lifecycle: partial payment day return logic, FIFO, nextYear cap, auto-payment cron
-- Day correction: negative balances, maternity, FIFO redistribution, bulk recalc
-- Notifications: manager notify, auto-reject emails, forgotten reports, budget banners
-- Sick leave accounting: dual status workflow, terminal states, concurrent changes
-- API errors: auth gaps, information disclosure, pagination/error inconsistency
+## Full Workbook Inventory — ALL 8 UNIFIED FORMAT
+| Area | Tabs | Suites | Cases | Format |
+|------|------|--------|-------|--------|
+| vacation | 11 | 8 | 130 | unified |
+| sick-leave | 9 | 6 | 120 | unified |
+| day-off | 9 | 6 | 108 | unified |
+| reports | 10 | 7 | 110 | unified |
+| accounting | 9 | 6 | 92 | unified |
+| admin | 9 | 6 | 70 | unified |
+| statistics | 10 | 7 | 111 | unified (S63) |
+| security | 11 | 8 | 92 | unified (S64) |
+| **TOTAL** | **78** | **60** | **833** | **all unified** |
 
-### 2. SQLite Updates
-- 82 rows added to test_case_tracking (total: 520)
-- 1 analysis_run logged (session-52)
+## Cumulative Stats
+- 149 analysis runs, 141 design issues, 173 exploration findings
+- 833 test cases tracked in SQLite
+- 167 vault notes, ~775KB total
+- 8 unified XLSX workbooks, all verified
 
-## Current State
-- Vault notes: 159 (unchanged — existing notes sufficient for generation)
-- Analysis runs: 137
-- Design issues: 121
-- Exploration findings: 173
-- External refs: 65
-- Module health: 25 modules tracked
-- Test case tracking: 520 (111 statistics + 120 sick leave + 115 day-off + 92 security + 82 accounting)
+## Phase B Status: COMPLETE — ALL UNIFIED
+All 8 workbooks now in unified format (statistics S63, security S64).
+No remaining P0/P1/P2 items. Only P3 backlog remains.
 
-## Phase B Progress
-
-| Module | Priority | Qase Existing | Generated | Status |
-|--------|----------|---------------|-----------|--------|
-| Statistics | #1 | 0 | 111 | DONE |
-| Sick Leave lifecycle | #2 | 57 (display only) | 120 | DONE |
-| Day-Off lifecycle | #3 | 19 (display only) | 115 | DONE |
-| Security/Permissions | #4 | 0 | 92 | DONE |
-| Accounting supplements | #5 | 127 | 82 | DONE |
-| Vacations supplements | #6 | 200+ | 0 | Next |
-| Reports supplements | #7 | existing | 0 | Pending |
-| Admin supplements | #8 | 115 | 0 | Pending |
-
-## Next Session Plan
-1. Generate Vacations supplements test plan + test cases (priority #6)
-2. Coverage: 200+ existing Qase cases — supplement gaps only
-3. Focus: API edge cases (12 bugs from vacation-crud-api-testing), business rule boundaries (advance vacation, accrued-only, FIFO), approval workflow edge cases (multi-approver, self-approval, cross-period), day calculation edge cases (maternity, negative, cross-year), form validation gaps
+## Next Session (65) — Optional
+- P3: Planner module investigation (blocked by Google Doc access)
+- P3: #3400 individual norm export investigation
+- P3: Sprint 16 ticket analysis (#2842, #2954, #2876)
+- P3: Frontend architecture analysis
+- Or: Phase B considered complete — await human direction

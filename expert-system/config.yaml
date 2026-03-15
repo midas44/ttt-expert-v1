@@ -5,9 +5,9 @@ session:
   max_duration_minutes: 120
 
 phase:
-  current: "knowledge_acquisition"
-  generation_allowed: false
-  coverage_override: 0              # Force coverage to this value (0-100). Remove or set -1 to use computed value.
+  current: "generation"
+  generation_allowed: true
+  coverage_override: -1             # Computed coverage used. Override removed by S57 auto-transition.
 
 thresholds:
   knowledge_coverage_target: 0.8

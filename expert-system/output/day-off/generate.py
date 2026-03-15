@@ -1,1045 +1,2052 @@
 #!/usr/bin/env python3
-"""Generate unified day-off.xlsx workbook with test plan + all test suites."""
+"""Generate day-off.xlsx — unified test workbook for Day-Off module.
+
+Phase B output for the TTT Expert System.
+Covers: CRUD, approval workflow, calendar conflicts, optional approvers,
+        permissions, validation, error handling.
+"""
 
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
-from datetime import date
+from datetime import datetime
 
-OUTPUT = "/home/v/Dev/ttt-expert-v1/expert-system/output/day-off/day-off.xlsx"
+# ── Styling constants ──────────────────────────────────────────────
 
-# ── Styles ──────────────────────────────────────────────────────────────────
-ARIAL = "Arial"
-HEADER_FONT = Font(name=ARIAL, bold=True, size=11, color="FFFFFF")
-HEADER_FILL = PatternFill("solid", fgColor="2F5496")
-TITLE_FONT = Font(name=ARIAL, bold=True, size=14)
-SUBTITLE_FONT = Font(name=ARIAL, bold=True, size=12)
-BODY_FONT = Font(name=ARIAL, size=10)
-LINK_FONT = Font(name=ARIAL, size=10, color="0563C1", underline="single")
-BACK_LINK_FONT = Font(name=ARIAL, size=9, color="0563C1", underline="single")
-ROW_EVEN = PatternFill("solid", fgColor="D6E4F0")
-ROW_ODD = PatternFill("solid", fgColor="FFFFFF")
-RISK_CRIT = PatternFill("solid", fgColor="FF6B6B")
-RISK_HIGH = PatternFill("solid", fgColor="FFA07A")
-RISK_MED = PatternFill("solid", fgColor="FFD700")
-RISK_LOW = PatternFill("solid", fgColor="90EE90")
+FONT_HEADER = Font(name="Arial", bold=True, size=11, color="FFFFFF")
+FONT_BODY = Font(name="Arial", size=10)
+FONT_TITLE = Font(name="Arial", bold=True, size=14)
+FONT_SUBTITLE = Font(name="Arial", bold=True, size=12)
+FONT_LINK = Font(name="Arial", size=10, color="0563C1", underline="single")
+FONT_LINK_BOLD = Font(name="Arial", size=11, bold=True, color="0563C1", underline="single")
+FONT_SECTION = Font(name="Arial", bold=True, size=11)
+FONT_SMALL = Font(name="Arial", size=9, italic=True, color="666666")
+
+FILL_HEADER = PatternFill(start_color="2F5496", end_color="2F5496", fill_type="solid")
+FILL_ROW_ODD = PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid")
+FILL_ROW_EVEN = PatternFill(start_color="D6E4F0", end_color="D6E4F0", fill_type="solid")
+FILL_GREEN_HEADER = PatternFill(start_color="548235", end_color="548235", fill_type="solid")
+FILL_RISK_HIGH = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
+FILL_RISK_MED = PatternFill(start_color="FFEB9C", end_color="FFEB9C", fill_type="solid")
+FILL_RISK_LOW = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
+FILL_SECTION = PatternFill(start_color="E2EFDA", end_color="E2EFDA", fill_type="solid")
+
+ALIGN_CENTER = Alignment(horizontal="center", vertical="center", wrap_text=True)
+ALIGN_LEFT = Alignment(horizontal="left", vertical="top", wrap_text=True)
+ALIGN_LEFT_CENTER = Alignment(horizontal="left", vertical="center", wrap_text=True)
+
 THIN_BORDER = Border(
-    left=Side(style="thin"), right=Side(style="thin"),
-    top=Side(style="thin"), bottom=Side(style="thin"),
+    left=Side(style="thin", color="B4C6E7"),
+    right=Side(style="thin", color="B4C6E7"),
+    top=Side(style="thin", color="B4C6E7"),
+    bottom=Side(style="thin", color="B4C6E7"),
 )
-WRAP = Alignment(wrap_text=True, vertical="top")
-WRAP_CENTER = Alignment(wrap_text=True, vertical="top", horizontal="center")
 
-TAB_GREEN = "00B050"
-TAB_BLUE = "4472C4"
+TAB_COLOR_PLAN = "548235"
+TAB_COLOR_TS = "2F5496"
 
 
-def style_header_row(ws, row, max_col):
-    for c in range(1, max_col + 1):
-        cell = ws.cell(row=row, column=c)
-        cell.font = HEADER_FONT
-        cell.fill = HEADER_FILL
-        cell.alignment = Alignment(wrap_text=True, vertical="center", horizontal="center")
+# ── Helper functions ───────────────────────────────────────────────
+
+def style_header_row(ws, row, num_cols, fill=None):
+    """Apply header styling to a row."""
+    f = fill or FILL_HEADER
+    for col in range(1, num_cols + 1):
+        cell = ws.cell(row=row, column=col)
+        cell.font = FONT_HEADER
+        cell.fill = f
+        cell.alignment = ALIGN_CENTER
         cell.border = THIN_BORDER
 
 
-def style_data_row(ws, row, max_col, idx):
-    fill = ROW_EVEN if idx % 2 == 0 else ROW_ODD
-    for c in range(1, max_col + 1):
-        cell = ws.cell(row=row, column=c)
-        cell.font = BODY_FONT
-        cell.fill = fill
-        cell.alignment = WRAP
+def write_row(ws, row, values, font=None, fill=None, alignment=None):
+    """Write a row of values with optional styling."""
+    for col, val in enumerate(values, 1):
+        cell = ws.cell(row=row, column=col, value=val)
+        cell.font = font or FONT_BODY
+        cell.alignment = alignment or ALIGN_LEFT
+        cell.border = THIN_BORDER
+        if fill:
+            cell.fill = fill
+
+
+def auto_width(ws, min_width=10, max_width=60):
+    """Set column widths based on content."""
+    for col_cells in ws.columns:
+        col_letter = get_column_letter(col_cells[0].column)
+        max_len = min_width
+        for cell in col_cells:
+            if cell.value:
+                lines = str(cell.value).split("\n")
+                longest = max(len(line) for line in lines)
+                max_len = max(max_len, min(longest + 2, max_width))
+        ws.column_dimensions[col_letter].width = max_len
+
+
+def add_autofilter(ws, row, num_cols):
+    """Add autofilter to header row."""
+    ws.auto_filter.ref = f"A{row}:{get_column_letter(num_cols)}{ws.max_row}"
+
+
+def add_back_link(ws, row=1):
+    """Add back-link to Plan Overview in row 1."""
+    cell = ws.cell(row=row, column=1)
+    cell.value = "<- Back to Plan"
+    cell.font = FONT_LINK
+    cell.hyperlink = "#'Plan Overview'!A1"
+
+
+def write_ts_tab(ws, suite_name, test_cases):
+    """Write a complete TS- tab with header, back-link, and test cases."""
+    add_back_link(ws, row=1)
+    ws.cell(row=1, column=2, value=f"Suite: {suite_name}").font = FONT_SUBTITLE
+
+    headers = [
+        "Test ID", "Title", "Preconditions", "Steps",
+        "Expected Result", "Priority", "Type",
+        "Requirement Ref", "Module/Component", "Notes"
+    ]
+    header_row = 3
+    for col, h in enumerate(headers, 1):
+        cell = ws.cell(row=header_row, column=col, value=h)
+        cell.font = FONT_HEADER
+        cell.fill = FILL_HEADER
+        cell.alignment = ALIGN_CENTER
         cell.border = THIN_BORDER
 
+    for i, tc_data in enumerate(test_cases):
+        row = header_row + 1 + i
+        fill = FILL_ROW_EVEN if i % 2 == 0 else FILL_ROW_ODD
+        values = [
+            tc_data["id"], tc_data["title"], tc_data["preconditions"],
+            tc_data["steps"], tc_data["expected"], tc_data["priority"],
+            tc_data["type"], tc_data["req_ref"], tc_data["module"],
+            tc_data.get("notes", "")
+        ]
+        write_row(ws, row, values, fill=fill)
 
-def set_col_widths(ws, widths):
-    for i, w in enumerate(widths, 1):
+    add_autofilter(ws, header_row, len(headers))
+
+    col_widths = [14, 40, 35, 55, 45, 10, 12, 20, 25, 35]
+    for i, w in enumerate(col_widths, 1):
+        ws.column_dimensions[get_column_letter(i)].width = w
+
+    ws.freeze_panes = "A4"
+    return len(test_cases)
+
+
+# ── Test Case Data ─────────────────────────────────────────────────
+
+def tc(id_, title, pre, steps, expected, priority, type_, req, module, notes=""):
+    return {
+        "id": id_, "title": title, "preconditions": pre,
+        "steps": steps, "expected": expected, "priority": priority,
+        "type": type_, "req_ref": req, "module": module, "notes": notes
+    }
+
+
+# ── TS-DO-CRUD ─────────────────────────────────────────────────────
+
+TS_DO_CRUD = [
+    tc("TC-DO-001",
+       "Create day-off request — happy path",
+       "Active employee with office calendar containing a public holiday\n"
+       "Test data: SELECT c.date FROM calendar_day c JOIN office o ON c.calendar_id=o.calendar_id "
+       "WHERE c.day_type='PUBLIC_HOLIDAY' AND c.date > CURRENT_DATE LIMIT 5",
+       "1. POST /api/vacation/v1/employee-dayOff\n"
+       "2. Body: {employeeLogin, publicDate: <future holiday>, personalDate: <future workday>, "
+       "originalDate: <same as publicDate>, duration: 8, reason: 'Test day-off'}\n"
+       "3. Verify response status 200\n"
+       "4. GET /api/vacation/v1/employee-dayOff?searchType=MY to confirm",
+       "Day-off request created with status=NEW\n"
+       "Approver auto-assigned (employee's manager)\n"
+       "Optional approvers synced from employee defaults\n"
+       "EmployeeDayOffCreatedEvent published",
+       "Critical", "Functional",
+       "EmployeeDayOffController.create", "EmployeeDayOffServiceImpl",
+       "Core happy path. Verify via DB: SELECT * FROM employee_dayoff_request WHERE id=<new_id>"),
+
+    tc("TC-DO-002",
+       "Create day-off — CPO self-approves on creation",
+       "CPO/Department Manager employee\n"
+       "Test data: SELECT e.login FROM employee e JOIN employee_global_roles r "
+       "ON e.id=r.employee_id WHERE r.role='ROLE_DEPARTMENT_MANAGER' AND e.status='ACTIVE' LIMIT 3",
+       "1. POST /api/vacation/v1/employee-dayOff as CPO user\n"
+       "2. Body: valid day-off request\n"
+       "3. Check status and approver in response\n"
+       "4. DB: SELECT status, approver_id FROM employee_dayoff_request WHERE id=<new_id>",
+       "Request created with status=APPROVED (auto-approved)\n"
+       "Approver = self (CPO's own ID)\n"
+       "Ledger entries created immediately (credit + debit)\n"
+       "Manager added as optional approver with ASKED status",
+       "Critical", "Functional",
+       "EmployeeDayOffServiceImpl.create", "EmployeeDayOffServiceImpl",
+       "CPO pattern: self-approve + manager as optional. Same as vacation CPO flow."),
+
+    tc("TC-DO-003",
+       "Create day-off — duplicate publicDate rejected",
+       "Employee with existing day-off request for a specific publicDate\n"
+       "Test data: SELECT employee_login, original_date FROM employee_dayoff_request "
+       "WHERE status IN ('NEW','APPROVED') LIMIT 5",
+       "1. POST /api/vacation/v1/employee-dayOff\n"
+       "2. Body: publicDate = same as existing request's originalDate\n"
+       "3. Check error response",
+       "HTTP 400\n"
+       "errorCode: validation.EmployeeDayOffPublicDateExists.message\n"
+       "Duplicate request for same public date blocked by @EmployeeDayOffPublicDateExists validator",
+       "High", "Negative",
+       "EmployeeDayOffPublicDateExistsValidator", "EmployeeDayOffCreateRequestDTO",
+       "Custom validator checks for existing request with same publicDate"),
+
+    tc("TC-DO-004",
+       "Create day-off — publicDate not in calendar",
+       "Active employee, date that is NOT in office calendar as public holiday",
+       "1. POST /api/vacation/v1/employee-dayOff\n"
+       "2. Body: publicDate = a regular workday (not in calendar)\n"
+       "3. Check error response",
+       "HTTP 400\n"
+       "errorCode: validation.PublicDateNotFoundInCalendar.message\n"
+       "Date not found in office calendar OR employee's day-off calendar",
+       "High", "Negative",
+       "EmployeeDayOffPublicDateExistsValidator", "EmployeeDayOffCreateRequestDTO",
+       "Validator checks date exists in office calendar OR employee's dayoff calendar"),
+
+    tc("TC-DO-005",
+       "Create day-off — personalDate already used",
+       "Employee with existing day-off using a specific personalDate\n"
+       "Test data: SELECT personal_date FROM employee_dayoff_request WHERE status='APPROVED'",
+       "1. POST /api/vacation/v1/employee-dayOff\n"
+       "2. Body: personalDate = date already used by another day-off request\n"
+       "3. Check error response",
+       "HTTP 400\n"
+       "PersonalDateValidator rejects: personalDate already used by another request\n"
+       "Error in personalDate field validation",
+       "High", "Negative",
+       "EmployeeDayOffPersonalDateExistsValidator", "EmployeeDayOffCreateRequestDTO",
+       "@EmployeeDayOffPersonalDateExists custom validator"),
+
+    tc("TC-DO-006",
+       "Create day-off — all fields null (missing @NotNull)",
+       "Active employee",
+       "1. POST /api/vacation/v1/employee-dayOff\n"
+       "2. Body: {} (empty object, all fields null)\n"
+       "3. Check response",
+       "DESIGN ISSUE: No @NotNull on any DTO field\n"
+       "Custom validators treat null as valid (return true for null)\n"
+       "Possible NPE in service layer when processing null fields\n"
+       "May create request with all null values",
+       "High", "Negative",
+       "DI: Missing @NotNull on DTO fields", "EmployeeDayOffCreateRequestDTO",
+       "All DTO fields lack @NotNull. Both custom validators return true for null input."),
+
+    tc("TC-DO-007",
+       "Create day-off — null duration (no validation)",
+       "Active employee with valid publicDate and personalDate",
+       "1. POST /api/vacation/v1/employee-dayOff\n"
+       "2. Body: valid publicDate/personalDate, duration: null\n"
+       "3. Check response and DB",
+       "DESIGN ISSUE: duration has no @NotNull, no @Min/@Max\n"
+       "Null duration accepted — stored as null in DB\n"
+       "Ledger entries may have null duration\n"
+       "Downstream calculations may NPE on null duration",
+       "High", "Negative",
+       "DI: No duration validation", "EmployeeDayOffCreateRequestDTO",
+       "No validation annotations on duration field at all"),
+
+    tc("TC-DO-008",
+       "Create day-off — negative duration",
+       "Active employee with valid publicDate and personalDate",
+       "1. POST /api/vacation/v1/employee-dayOff\n"
+       "2. Body: duration: -8\n"
+       "3. Check response and DB",
+       "DESIGN ISSUE: No @Min on duration — negative value accepted\n"
+       "Negative duration creates inverted ledger entries\n"
+       "Credit becomes debit and vice versa\n"
+       "Corrupts vacation day balance calculation",
+       "High", "Boundary",
+       "DI: No duration validation", "EmployeeDayOffCreateRequestDTO",
+       "No @Min/@Max annotations. Negative duration inverts credit/debit logic."),
+
+    tc("TC-DO-009",
+       "Create day-off — zero duration",
+       "Active employee with valid dates",
+       "1. POST /api/vacation/v1/employee-dayOff\n"
+       "2. Body: duration: 0\n"
+       "3. Check response and ledger",
+       "Duration 0 accepted (no validation)\n"
+       "In ledger: duration=0 means day-off taken (debit)\n"
+       "But on credit side, duration=0 means no credit given\n"
+       "Net effect: takes a day off without earning credit for worked holiday",
+       "Medium", "Boundary",
+       "DI: No duration validation", "EmployeeDayOffCreateRequestDTO, employee_dayoff",
+       "Boundary: zero duration has semantic meaning in ledger (debit marker)"),
+
+    tc("TC-DO-010",
+       "Create day-off — very long reason (no size limit)",
+       "Active employee with valid dates",
+       "1. POST /api/vacation/v1/employee-dayOff\n"
+       "2. Body: reason: 'A' * 10000 (10K character string)\n"
+       "3. Check response",
+       "DESIGN ISSUE: No @Size on reason field\n"
+       "Very long string accepted by DTO validation\n"
+       "DB column type determines actual limit\n"
+       "May cause truncation or DB error if column is VARCHAR(N)",
+       "Low", "Boundary",
+       "DI: No reason validation", "EmployeeDayOffCreateRequestDTO",
+       "No size limit on reason. DB column type is the only constraint."),
+
+    tc("TC-DO-011",
+       "PATCH personalDate — happy path",
+       "Existing day-off in NEW status owned by current user\n"
+       "Test data: SELECT id FROM employee_dayoff_request WHERE status='NEW' LIMIT 5",
+       "1. PATCH /api/vacation/v1/employee-dayOff/{id}\n"
+       "2. Body: {personalDate: <new valid date>}\n"
+       "3. Verify response\n"
+       "4. DB: SELECT personal_date FROM employee_dayoff_request WHERE id=<id>",
+       "personalDate updated successfully\n"
+       "Status remains unchanged\n"
+       "Only personalDate field is patchable (EmployeeDayOffPatchRequestDTO)\n"
+       "originalDate remains immutable",
+       "High", "Functional",
+       "EmployeeDayOffController.patch", "EmployeeDayOffServiceImpl",
+       "PATCH only allows personalDate change. originalDate is immutable."),
+
+    tc("TC-DO-012",
+       "PATCH personalDate on APPROVED day-off",
+       "Existing APPROVED day-off owned by current user",
+       "1. PATCH /api/vacation/v1/employee-dayOff/{id}\n"
+       "2. Body: {personalDate: <new date>}\n"
+       "3. Check response",
+       "DESIGN ISSUE: EDIT permission is unconditional for owner\n"
+       "PATCH succeeds even on APPROVED request\n"
+       "Ledger entries NOT updated (still reference old personalDate)\n"
+       "Creates data inconsistency between request and ledger",
+       "High", "Functional",
+       "DI: Unconditional EDIT", "EmployeeDayOffPermissionService",
+       "EDIT has no status check. Owner can PATCH any status including terminal ones."),
+
+    tc("TC-DO-013",
+       "PATCH personalDate on DELETED day-off",
+       "Existing DELETED day-off owned by current user\n"
+       "Test data: SELECT id FROM employee_dayoff_request WHERE status='DELETED'",
+       "1. PATCH /api/vacation/v1/employee-dayOff/{id}\n"
+       "2. Body: {personalDate: <new date>}\n"
+       "3. Check response",
+       "DESIGN ISSUE: EDIT unconditional — succeeds on DELETED request\n"
+       "Can modify soft-deleted records\n"
+       "No business logic prevents editing terminal states",
+       "High", "Negative",
+       "DI: Unconditional EDIT", "EmployeeDayOffPermissionService",
+       "Bug: owner can PATCH even DELETED/DELETED_FROM_CALENDAR requests"),
+
+    tc("TC-DO-014",
+       "PATCH personalDate — date already used",
+       "Existing NEW day-off, another day-off using target personalDate",
+       "1. PATCH /api/vacation/v1/employee-dayOff/{id}\n"
+       "2. Body: {personalDate: <date used by another request>}\n"
+       "3. Check error response",
+       "HTTP 400\n"
+       "@EmployeeDayOffPersonalDateExists validator rejects duplicate\n"
+       "personalDate must be unique across employee's requests",
+       "Medium", "Negative",
+       "EmployeeDayOffPersonalDateExistsValidator", "EmployeeDayOffPatchRequestDTO",
+       "Same validator used for create and patch"),
+
+    tc("TC-DO-015",
+       "DELETE day-off — happy path (NEW status)",
+       "Existing day-off in NEW status owned by current user",
+       "1. DELETE /api/vacation/v1/employee-dayOff/{id}\n"
+       "2. Verify response\n"
+       "3. DB: SELECT status FROM employee_dayoff_request WHERE id=<id>",
+       "Status changed to DELETED\n"
+       "Soft-delete (record remains in DB)\n"
+       "No ledger changes (no ledger entries for NEW requests)\n"
+       "canBeCancelled was true (status != APPROVED)",
+       "High", "Functional",
+       "EmployeeDayOffController.delete", "EmployeeDayOffServiceImpl",
+       "DELETE permission requires canBeCancelled = true"),
+
+    tc("TC-DO-016",
+       "DELETE day-off — APPROVED with personalDate >= report period",
+       "APPROVED day-off with personalDate in current or future report period\n"
+       "Test data: SELECT id, personal_date FROM employee_dayoff_request "
+       "WHERE status='APPROVED' AND personal_date >= CURRENT_DATE",
+       "1. DELETE /api/vacation/v1/employee-dayOff/{id}\n"
+       "2. Verify response\n"
+       "3. Check status and ledger entries",
+       "canBeCancelled = true (personalDate >= report period start)\n"
+       "Status changed to DELETED\n"
+       "Ledger entries remain (not cleaned up on DELETE)\n"
+       "Vacation day balance should be recalculated",
+       "High", "Functional",
+       "EmployeeDayOffPermissionService.canBeCancelled", "EmployeeDayOffServiceImpl",
+       "canBeCancelled: status != APPROVED || personalDate >= reportPeriod"),
+
+    tc("TC-DO-017",
+       "DELETE day-off — APPROVED with personalDate < report period (blocked)",
+       "APPROVED day-off with personalDate in past closed report period",
+       "1. Find APPROVED day-off with personalDate before report period start\n"
+       "2. DELETE /api/vacation/v1/employee-dayOff/{id}\n"
+       "3. Check error response",
+       "HTTP 403 or permission denied\n"
+       "canBeCancelled = false (APPROVED AND personalDate < report period)\n"
+       "DELETE permission not granted\n"
+       "Day-off in closed period cannot be cancelled",
+       "High", "Negative",
+       "EmployeeDayOffPermissionService", "EmployeeDayOffPermissionService",
+       "Prevents deletion of day-offs already accounted for in closed periods"),
+
+    tc("TC-DO-018",
+       "DELETE day-off — not owner (permission denied)",
+       "Day-off owned by another employee, authenticated as non-owner non-approver",
+       "1. DELETE /api/vacation/v1/employee-dayOff/{id} (someone else's request)\n"
+       "2. Check error response",
+       "HTTP 403\n"
+       "errorCode: exception.employee.dayOff.no.permission\n"
+       "DELETE permission only granted to owner",
+       "High", "Security",
+       "EmployeeDayOffPermissionService", "EmployeeDayOffPermissionService",
+       "Only owner gets DELETE permission (via canBeCancelled check)"),
+
+    tc("TC-DO-019",
+       "Create day-off — day-off crossing vacation",
+       "Employee with existing approved vacation on the personalDate",
+       "1. POST /api/vacation/v1/employee-dayOff\n"
+       "2. Body: personalDate = date within employee's existing vacation range\n"
+       "3. Check error response",
+       "HTTP 400\n"
+       "errorCode: exception.day.off.crossing.vacation\n"
+       "DayOffCrossingVacationException thrown\n"
+       "Cannot take day-off on a date covered by vacation",
+       "High", "Negative",
+       "EmployeeDayOffServiceImpl", "EmployeeDayOffServiceImpl",
+       "Cross-module validation: day-off vs vacation date overlap"),
+
+    tc("TC-DO-020",
+       "Upsert on creation — silent overwrite risk",
+       "Manipulate data so upsert condition is met (same employee + originalDate in ledger)",
+       "1. Create day-off request for publicDate X\n"
+       "2. Verify ledger entry created\n"
+       "3. Manipulate: create condition where upsert finds existing record\n"
+       "4. Check if original record silently overwritten",
+       "DESIGN ISSUE: Upsert on creation can silently overwrite records\n"
+       "If matching record exists in employee_dayoff table, it gets updated\n"
+       "No conflict detection or error raised\n"
+       "Data integrity risk: original record data lost",
+       "Medium", "Negative",
+       "DI: Upsert silent overwrite", "EmployeeDayOffServiceImpl",
+       "Upsert pattern: INSERT ON CONFLICT UPDATE — silently replaces data"),
+]
+
+
+# ── TS-DO-Approval ─────────────────────────────────────────────────
+
+TS_DO_APPROVAL = [
+    tc("TC-DO-021",
+       "Approve NEW day-off — happy path with ledger creation",
+       "Day-off in NEW status, authenticated as assigned approver\n"
+       "Test data: SELECT r.id, r.approver_login FROM employee_dayoff_request r "
+       "WHERE r.status='NEW' LIMIT 5",
+       "1. PUT /api/vacation/v1/employee-dayOff/approve/{id}\n"
+       "2. Verify response\n"
+       "3. DB: SELECT * FROM employee_dayoff WHERE employee_id=<emp_id> "
+       "AND original_date=<date>\n"
+       "4. Check vacation balance change",
+       "Status changed to APPROVED\n"
+       "Two ledger entries created:\n"
+       "  - Credit: lastApprovedDate slot, duration from calendar/norm\n"
+       "  - Debit: personalDate slot, duration=0 + reason from request\n"
+       "RecalculateVacationDaysHandler fires (diff=+1/-1)\n"
+       "UpdateMonthNormHandler recalculates norms for both months",
+       "Critical", "Functional",
+       "EmployeeDayOffServiceImpl.approve", "EmployeeDayOffServiceImpl",
+       "Core approval flow. Verify both ledger entries and vacation balance."),
+
+    tc("TC-DO-022",
+       "Approve REJECTED day-off — re-approval",
+       "Day-off in REJECTED status, authenticated as approver\n"
+       "REJECTED is in approvableStatuses set",
+       "1. PUT /api/vacation/v1/employee-dayOff/approve/{id}\n"
+       "2. Verify status changes to APPROVED\n"
+       "3. Check ledger entries created",
+       "Status REJECTED -> APPROVED\n"
+       "Approvable statuses: {NEW, REJECTED}\n"
+       "Ledger entries created fresh\n"
+       "Vacation balance recalculated",
+       "High", "Functional",
+       "EmployeeDayOffPermissionService", "EmployeeDayOffServiceImpl",
+       "Re-approval after rejection. Both NEW and REJECTED are approvable."),
+
+    tc("TC-DO-023",
+       "Approve already APPROVED day-off (invalid)",
+       "Day-off in APPROVED status",
+       "1. PUT /api/vacation/v1/employee-dayOff/approve/{id}\n"
+       "2. Check error response",
+       "APPROVED not in approvableStatuses {NEW, REJECTED}\n"
+       "Permission check fails — APPROVE not granted\n"
+       "HTTP 403: exception.employee.dayOff.no.permission",
+       "Medium", "Negative",
+       "EmployeeDayOffPermissionService", "EmployeeDayOffPermissionService",
+       "APPROVED is not in approvable set — cannot double-approve"),
+
+    tc("TC-DO-024",
+       "Approve DELETED day-off (invalid)",
+       "Day-off in DELETED status",
+       "1. PUT /api/vacation/v1/employee-dayOff/approve/{id}\n"
+       "2. Check error response",
+       "DELETED not in approvableStatuses\n"
+       "HTTP 403: exception.employee.dayOff.no.permission\n"
+       "Cannot approve a deleted request",
+       "Medium", "Negative",
+       "EmployeeDayOffPermissionService", "EmployeeDayOffPermissionService",
+       "Terminal status — no APPROVE permission granted"),
+
+    tc("TC-DO-025",
+       "Reject NEW day-off — happy path",
+       "Day-off in NEW status, authenticated as approver",
+       "1. PUT /api/vacation/v1/employee-dayOff/reject/{id}\n"
+       "2. Verify response\n"
+       "3. DB: SELECT status FROM employee_dayoff_request WHERE id=<id>",
+       "Status changed to REJECTED\n"
+       "No ledger entries created or modified\n"
+       "Rejectable statuses: {NEW, APPROVED}\n"
+       "Simple status change only",
+       "High", "Functional",
+       "EmployeeDayOffServiceImpl.reject", "EmployeeDayOffServiceImpl",
+       "Reject is simpler than approve — no ledger operations"),
+
+    tc("TC-DO-026",
+       "Reject APPROVED day-off — personalDate >= report period",
+       "APPROVED day-off with personalDate in current/future period\n"
+       "Authenticated as approver",
+       "1. PUT /api/vacation/v1/employee-dayOff/reject/{id}\n"
+       "2. Verify response\n"
+       "3. Check ledger and vacation balance",
+       "Status APPROVED -> REJECTED\n"
+       "REJECT permission granted: NEW/APPROVED AND personalDate >= report period\n"
+       "Ledger entries remain (not cleaned up)\n"
+       "Vacation balance should be recalculated to reverse the day-off effect",
+       "High", "Functional",
+       "EmployeeDayOffPermissionService", "EmployeeDayOffServiceImpl",
+       "Rejecting APPROVED requires personalDate >= report period start"),
+
+    tc("TC-DO-027",
+       "Reject APPROVED day-off — personalDate < report period (blocked)",
+       "APPROVED day-off with personalDate in past closed report period",
+       "1. PUT /api/vacation/v1/employee-dayOff/reject/{id}\n"
+       "2. Check error response",
+       "HTTP 403: exception.employee.dayOff.no.permission\n"
+       "REJECT not granted: APPROVED + personalDate < report period\n"
+       "Cannot reject day-off already in closed accounting period",
+       "High", "Negative",
+       "EmployeeDayOffPermissionService", "EmployeeDayOffPermissionService",
+       "Report period gate prevents rejecting accounted day-offs"),
+
+    tc("TC-DO-028",
+       "Reject REJECTED day-off (already rejected)",
+       "Day-off already in REJECTED status",
+       "1. PUT /api/vacation/v1/employee-dayOff/reject/{id}\n"
+       "2. Check error response",
+       "REJECTED is in rejectableStatuses {NEW, APPROVED}\n"
+       "Wait — REJECTED IS in the set? Check: rejectableStatuses = {NEW, APPROVED}\n"
+       "REJECTED not in set -> permission denied\n"
+       "HTTP 403: exception.employee.dayOff.no.permission",
+       "Medium", "Negative",
+       "EmployeeDayOffPermissionService", "EmployeeDayOffPermissionService",
+       "Rejectables are {NEW, APPROVED}, not REJECTED"),
+
+    tc("TC-DO-029",
+       "Reject as non-approver (permission denied)",
+       "Day-off in NEW status, authenticated as non-approver non-owner",
+       "1. PUT /api/vacation/v1/employee-dayOff/reject/{id}\n"
+       "2. Check error response",
+       "HTTP 403: exception.employee.dayOff.no.permission\n"
+       "REJECT permission only for assigned approver\n"
+       "Owner cannot reject own request",
+       "High", "Security",
+       "EmployeeDayOffPermissionService", "EmployeeDayOffPermissionService",
+       "Only the assigned approver can reject"),
+
+    tc("TC-DO-030",
+       "Change approver — happy path",
+       "Day-off in NEW status, authenticated as current approver\n"
+       "Valid new approver login",
+       "1. PUT /api/vacation/v1/employee-dayOff/change-approver/{id}/{newApproverLogin}\n"
+       "2. Verify response\n"
+       "3. DB: SELECT approver_login FROM employee_dayoff_request WHERE id=<id>\n"
+       "4. Check optional approver cascade",
+       "Approver changed to newApproverLogin\n"
+       "Old approver moved to optional approvers with ASKED status\n"
+       "New approver removed from optional approvers (if was optional)\n"
+       "Cascade: approver change triggers optional approver reshuffle",
+       "High", "Functional",
+       "EmployeeDayOffController.changeApprover", "EmployeeDayOffServiceImpl",
+       "Approver change cascades to optional approvers"),
+
+    tc("TC-DO-031",
+       "Change approver on DELETED day-off (unconditional permission)",
+       "Day-off in DELETED status, authenticated as approver",
+       "1. PUT /api/vacation/v1/employee-dayOff/change-approver/{id}/{newLogin}\n"
+       "2. Check response",
+       "DESIGN ISSUE: EDIT_APPROVER is unconditional — no status check\n"
+       "Change approver succeeds even on DELETED request\n"
+       "Can modify approver on DELETED_FROM_CALENDAR too\n"
+       "No business value — approver change on terminal status",
+       "High", "Negative",
+       "DI: Unconditional EDIT_APPROVER", "EmployeeDayOffPermissionService",
+       "Bug: EDIT_APPROVER has no status check, always granted to approver"),
+
+    tc("TC-DO-032",
+       "Change approver on DELETED_FROM_CALENDAR day-off",
+       "Day-off in DELETED_FROM_CALENDAR status",
+       "1. PUT /api/vacation/v1/employee-dayOff/change-approver/{id}/{newLogin}\n"
+       "2. Check response",
+       "DESIGN ISSUE: Succeeds — EDIT_APPROVER unconditional\n"
+       "DELETED_FROM_CALENDAR is a terminal status\n"
+       "Approver change has no meaningful effect\n"
+       "Optional approver cascade still executes unnecessarily",
+       "Medium", "Negative",
+       "DI: Unconditional EDIT_APPROVER", "EmployeeDayOffPermissionService",
+       "Same bug as TC-DO-031 on different terminal status"),
+
+    tc("TC-DO-033",
+       "System rejection — bulk reject when calendar day removed",
+       "Multiple NEW day-off requests for the same public holiday date\n"
+       "Admin removes that date from production calendar",
+       "1. Find office with public holiday having NEW day-off requests\n"
+       "2. Admin: remove public holiday from calendar\n"
+       "3. System calls rejectedBySystem(officeId, date)\n"
+       "4. Check all affected requests",
+       "All NEW requests with matching date set to REJECTED\n"
+       "System rejection (not manual reject)\n"
+       "Only NEW status affected — APPROVED untouched by rejectedBySystem\n"
+       "Different from deleteDayOffs which sets DELETED_FROM_CALENDAR",
+       "Critical", "Functional",
+       "EmployeeDayOffServiceImpl.rejectedBySystem", "EmployeeDayOffServiceImpl",
+       "System rejection targets NEW only. deleteDayOffs targets NEW+APPROVED."),
+
+    tc("TC-DO-034",
+       "Approve — ledger credit duration from calendar",
+       "NEW day-off for a date that exists in office calendar with known duration",
+       "1. Check calendar_day duration for the public holiday\n"
+       "2. PUT /api/vacation/v1/employee-dayOff/approve/{id}\n"
+       "3. DB: SELECT duration FROM employee_dayoff WHERE original_date=<date> AND duration > 0",
+       "Credit ledger entry duration = calendar day duration (typically 8 or 7)\n"
+       "Duration sourced from: existing ledger OR calendar OR reporting-norm fallback\n"
+       "Fallback chain: ledger -> calendar -> norm (8h default)",
+       "High", "Functional",
+       "EmployeeDayOffServiceImpl.changeDayOffDaysAfterApprove", "EmployeeDayOffServiceImpl",
+       "Verify credit duration matches calendar. 8h=full day, 7h=half-working day."),
+
+    tc("TC-DO-035",
+       "Approve — ledger debit entry verification",
+       "NEW day-off request with specific personalDate and reason",
+       "1. PUT /api/vacation/v1/employee-dayOff/approve/{id}\n"
+       "2. DB: SELECT * FROM employee_dayoff WHERE personal_date=<personalDate> AND duration=0",
+       "Debit ledger entry:\n"
+       "  - duration = 0 (marks day-off taken)\n"
+       "  - reason copied from request\n"
+       "  - personal_date matches request personalDate\n"
+       "  - employee matches request employee",
+       "High", "Functional",
+       "EmployeeDayOffServiceImpl.changeDayOffDaysAfterApprove", "EmployeeDayOffServiceImpl",
+       "duration=0 is the debit marker. Reason propagated from request."),
+
+    tc("TC-DO-036",
+       "Approve — non-atomic transaction risk",
+       "Simulate concurrent access during approve",
+       "1. PUT /api/vacation/v1/employee-dayOff/approve/{id}\n"
+       "2. Monitor: ledger write and status update are separate calls\n"
+       "3. If interruption between them: check for orphaned ledger entries\n"
+       "4. DB: compare employee_dayoff entries vs request status",
+       "DESIGN ISSUE: No @Transactional on approve\n"
+       "Uses performInTransaction wrapper instead\n"
+       "Ledger entries written separately from status update\n"
+       "Failure between steps = ledger entries without APPROVED status\n"
+       "Risk: orphaned ledger records corrupt vacation balance",
+       "High", "Integration",
+       "DI: No @Transactional on approve", "EmployeeDayOffServiceImpl",
+       "Non-atomic: changeDayOffDaysAfterApprove + changeDayOffStatus are separate"),
+]
+
+
+# ── TS-DO-Calendar ─────────────────────────────────────────────────
+
+TS_DO_CALENDAR = [
+    tc("TC-DO-037",
+       "Calendar removal — DELETED_FROM_CALENDAR for NEW+APPROVED requests",
+       "Multiple day-off requests (NEW and APPROVED) for same originalDate\n"
+       "Admin removes that date from production calendar",
+       "1. Identify date with both NEW and APPROVED requests\n"
+       "2. Admin: remove date from production calendar\n"
+       "3. System calls deleteDayOffs(date)\n"
+       "4. DB: SELECT status FROM employee_dayoff_request WHERE original_date=<date>",
+       "All NEW and APPROVED requests: status -> DELETED_FROM_CALENDAR\n"
+       "Ledger entries physically deleted (not soft-delete)\n"
+       "Vacation days recalculated for each affected employee\n"
+       "EmployeeDayOffDeletedFromCalendarEvent published",
+       "Critical", "Functional",
+       "EmployeeDayOffServiceImpl.deleteDayOffs", "EmployeeDayOffServiceImpl",
+       "Physical deletion of ledger entries. Different from system rejection."),
+
+    tc("TC-DO-038",
+       "Calendar removal — REJECTED requests unaffected",
+       "REJECTED day-off request for a date being removed from calendar",
+       "1. Ensure REJECTED request exists for target date\n"
+       "2. Remove date from calendar\n"
+       "3. Check REJECTED request status",
+       "REJECTED request status unchanged\n"
+       "deleteDayOffs only targets NEW and APPROVED\n"
+       "REJECTED, DELETED, DELETED_FROM_CALENDAR are not affected",
+       "Medium", "Functional",
+       "EmployeeDayOffServiceImpl.deleteDayOffs", "EmployeeDayOffServiceImpl",
+       "Only NEW/APPROVED targeted. Terminal statuses excluded."),
+
+    tc("TC-DO-039",
+       "Calendar removal — ledger entries physically deleted",
+       "APPROVED day-off with ledger entries, calendar date being removed",
+       "1. Verify ledger entries exist: SELECT * FROM employee_dayoff WHERE original_date=<date>\n"
+       "2. Remove date from calendar\n"
+       "3. SELECT * FROM employee_dayoff WHERE original_date=<date>",
+       "Ledger entries physically deleted from employee_dayoff table\n"
+       "Not soft-delete — records are gone\n"
+       "This is different from request table (soft-delete via status)\n"
+       "Vacation balance recalculated after ledger deletion",
+       "High", "Functional",
+       "EmployeeDayOffServiceImpl.deleteDayOffs", "EmployeeDayOffServiceImpl",
+       "Physical DELETE on ledger table vs status change on request table"),
+
+    tc("TC-DO-040",
+       "Office change — auto-delete all day-offs for year",
+       "Employee with multiple NEW/APPROVED day-offs changes office\n"
+       "AutoDeleteHelper.update(employeeId, year) triggered",
+       "1. Note employee's day-offs for current year\n"
+       "2. Change employee's office\n"
+       "3. AutoDeleteHelper.update fires\n"
+       "4. Check all day-off requests and ledger entries",
+       "All NEW and APPROVED day-offs: status -> DELETED_FROM_CALENDAR\n"
+       "ALL ledger entries for the year deleted (physical delete)\n"
+       "Employee notified of changes\n"
+       "Office calendar mismatch resolved",
+       "Critical", "Functional",
+       "AutoDeleteHelper.update", "AutoDeleteHelper",
+       "Cascading cleanup on office change. Affects entire year."),
+
+    tc("TC-DO-041",
+       "Office change — PAGE_SIZE=100 hard limit",
+       "Employee with >100 day-off requests for a year (edge case)\n"
+       "Requires test data setup",
+       "1. Create >100 day-off requests for one employee in one year\n"
+       "2. Trigger office change -> AutoDeleteHelper.update\n"
+       "3. Count remaining requests not set to DELETED_FROM_CALENDAR",
+       "DESIGN ISSUE: PAGE_SIZE=100 hard limit\n"
+       "Only first 100 day-offs processed per page\n"
+       "Requests 101+ remain in NEW/APPROVED status\n"
+       "Partial cleanup — data integrity violation\n"
+       "No pagination loop to process all records",
+       "High", "Boundary",
+       "DI: PAGE_SIZE=100 limit", "AutoDeleteHelper",
+       "Hard limit. No loop. >100 records = incomplete cleanup."),
+
+    tc("TC-DO-042",
+       "Office change — ledger entries for entire year deleted",
+       "Employee with ledger entries across multiple months, changes office",
+       "1. DB: SELECT COUNT(*) FROM employee_dayoff WHERE employee_id=<id> AND "
+       "EXTRACT(YEAR FROM original_date)=2026\n"
+       "2. Trigger office change\n"
+       "3. Repeat count query",
+       "ALL ledger entries for the year physically deleted\n"
+       "Not limited to matched requests — entire year wiped\n"
+       "Includes entries for REJECTED/DELETED requests\n"
+       "Full recalculation triggered after deletion",
+       "High", "Functional",
+       "AutoDeleteHelper.update", "AutoDeleteHelper",
+       "Deletes ALL ledger entries for year, not just NEW/APPROVED ones"),
+
+    tc("TC-DO-043",
+       "CalendarUpdateHasDayOffConflictEvent — diff=0 (half-working day)",
+       "Calendar change creates half-working day that intersects existing day-off",
+       "1. Admin: modify calendar day to half-working (diff=0 in event)\n"
+       "2. CalendarUpdateHasDayOffConflictEvent fires\n"
+       "3. Check notification sent to employee",
+       "diff=0: half-working day notification sent\n"
+       "No vacation recalculation (diff=0 means no full-day change)\n"
+       "Informational notification only\n"
+       "Employee informed of calendar change affecting their day-off",
+       "Medium", "Functional",
+       "CalendarUpdateHasDayOffConflictEvent handler", "Event handlers",
+       "diff=0 means calendar change is informational, not destructive"),
+
+    tc("TC-DO-044",
+       "CalendarUpdateHasDayOffConflictEvent — diff!=0 (full day change)",
+       "Calendar change creates full-day change intersecting existing day-off",
+       "1. Admin: modify calendar day type (diff!=0)\n"
+       "2. CalendarUpdateHasDayOffConflictEvent fires\n"
+       "3. Check notification and vacation recalculation",
+       "diff!=0: full day-off notification sent\n"
+       "Vacation recalculation triggered\n"
+       "Employee notified of material change\n"
+       "May trigger DELETED_FROM_CALENDAR if day is removed entirely",
+       "Medium", "Functional",
+       "CalendarUpdateHasDayOffConflictEvent handler", "Event handlers",
+       "diff!=0 triggers both notification and recalculation"),
+
+    tc("TC-DO-045",
+       "Concurrent calendar removal and manual approval",
+       "Day-off in NEW status while admin removes calendar date simultaneously",
+       "1. Start two concurrent operations:\n"
+       "   a. Admin removes calendar date (triggers deleteDayOffs)\n"
+       "   b. Approver approves the day-off\n"
+       "2. Check final state of request and ledger",
+       "Race condition risk:\n"
+       "Scenario A wins: status=DELETED_FROM_CALENDAR, no ledger\n"
+       "Scenario B wins: status=APPROVED, ledger exists but calendar gone\n"
+       "No locking mechanism to prevent concurrent state mutation\n"
+       "Could result in APPROVED day-off for non-existent calendar date",
+       "High", "Integration",
+       "DI: No transaction isolation", "EmployeeDayOffServiceImpl",
+       "Race between deleteDayOffs and approve. No optimistic locking."),
+]
+
+
+# ── TS-DO-OptApprover ─────────────────────────────────────────────
+
+TS_DO_OPT_APPROVER = [
+    tc("TC-DO-046",
+       "Add optional approver — happy path",
+       "Existing day-off, authenticated as owner or approver\n"
+       "Valid colleague login who is not creator or main approver",
+       "1. POST /api/vacation/v1/employee-dayOff-approvers\n"
+       "2. Body: {dayOffId: <id>, approverLogin: <colleague>}\n"
+       "3. Verify response\n"
+       "4. DB: SELECT * FROM employee_dayoff_approval WHERE request_id=<id>",
+       "Optional approver added with status=ASKED\n"
+       "Record created in employee_dayoff_approval table\n"
+       "FYI notification sent to optional approver",
+       "High", "Functional",
+       "EmployeeDayOffApprovalController.create", "EmployeeDayOffApprovalServiceImpl",
+       "Optional approvers are FYI — their approval/rejection is informational"),
+
+    tc("TC-DO-047",
+       "Add optional approver — constraint: day-off must exist",
+       "Non-existent dayOffId",
+       "1. POST /api/vacation/v1/employee-dayOff-approvers\n"
+       "2. Body: {dayOffId: 999999, approverLogin: <valid>}\n"
+       "3. Check error response",
+       "Error: day-off not found\n"
+       "Constraint 1 of 4: day-off must exist\n"
+       "HTTP 400 or 404",
+       "Medium", "Negative",
+       "EmployeeDayOffApprovalServiceImpl", "EmployeeDayOffApprovalServiceImpl",
+       "First of 4 create constraints validated"),
+
+    tc("TC-DO-048",
+       "Add optional approver — constraint: cannot add creator",
+       "Existing day-off, try to add the day-off creator as optional approver",
+       "1. POST /api/vacation/v1/employee-dayOff-approvers\n"
+       "2. Body: {dayOffId: <id>, approverLogin: <creator's login>}\n"
+       "3. Check error response",
+       "Error: cannot add creator as optional approver\n"
+       "Constraint 2 of 4: self-approval prevention",
+       "Medium", "Negative",
+       "EmployeeDayOffApprovalServiceImpl", "EmployeeDayOffApprovalServiceImpl",
+       "Cannot add request owner as their own optional approver"),
+
+    tc("TC-DO-049",
+       "Add optional approver — constraint: cannot add main approver",
+       "Existing day-off, try to add the main approver as optional approver",
+       "1. POST /api/vacation/v1/employee-dayOff-approvers\n"
+       "2. Body: {dayOffId: <id>, approverLogin: <main approver login>}\n"
+       "3. Check error response",
+       "Error: cannot add main approver as optional\n"
+       "Constraint 3 of 4: main approver already reviews\n"
+       "Prevents duplicate notification",
+       "Medium", "Negative",
+       "EmployeeDayOffApprovalServiceImpl", "EmployeeDayOffApprovalServiceImpl",
+       "Main approver is already the decision-maker — no optional role needed"),
+
+    tc("TC-DO-050",
+       "Add optional approver — constraint: cannot add duplicate",
+       "Existing day-off with existing optional approver, add same person again",
+       "1. POST /api/vacation/v1/employee-dayOff-approvers (add person X)\n"
+       "2. POST /api/vacation/v1/employee-dayOff-approvers (add person X again)\n"
+       "3. Check error response on second call",
+       "Error: duplicate optional approver\n"
+       "Constraint 4 of 4: uniqueness check\n"
+       "Same person cannot be optional approver twice",
+       "Medium", "Negative",
+       "EmployeeDayOffApprovalServiceImpl", "EmployeeDayOffApprovalServiceImpl",
+       "Prevents duplicate entries in approval table"),
+
+    tc("TC-DO-051",
+       "Add optional approver — access: only owner/approver/manager",
+       "Authenticated as unrelated employee (not owner, approver, or manager)",
+       "1. POST /api/vacation/v1/employee-dayOff-approvers\n"
+       "2. Body: valid dayOffId, valid approverLogin\n"
+       "3. Check error response",
+       "HTTP 403 or permission error\n"
+       "Only owner, main approver, or employee's manager can add optional approvers\n"
+       "Unrelated employees blocked",
+       "High", "Security",
+       "EmployeeDayOffApprovalServiceImpl access check", "EmployeeDayOffApprovalServiceImpl",
+       "Access validation: owner OR approver OR manager of the employee"),
+
+    tc("TC-DO-052",
+       "Update optional approver status — approver approves",
+       "Existing optional approval in ASKED status, authenticated as the optional approver",
+       "1. PATCH /api/vacation/v1/employee-dayOff-approvers/{id}\n"
+       "2. Body: {status: 'APPROVED'}\n"
+       "3. Verify response\n"
+       "4. DB: SELECT status FROM employee_dayoff_approval WHERE id=<id>",
+       "Status ASKED -> APPROVED\n"
+       "Only the optional approver themselves can update\n"
+       "FYI only — does not affect main request status\n"
+       "Informational approval recorded",
+       "High", "Functional",
+       "EmployeeDayOffApprovalController.patch", "EmployeeDayOffApprovalServiceImpl",
+       "Self-service: only the optional approver can change their own status"),
+
+    tc("TC-DO-053",
+       "Update optional approver status — approver rejects",
+       "Existing optional approval in ASKED status, authenticated as the optional approver",
+       "1. PATCH /api/vacation/v1/employee-dayOff-approvers/{id}\n"
+       "2. Body: {status: 'REJECTED'}\n"
+       "3. Verify response",
+       "Status ASKED -> REJECTED\n"
+       "FYI rejection — does not affect main request status\n"
+       "Main approver still decides independently",
+       "High", "Functional",
+       "EmployeeDayOffApprovalController.patch", "EmployeeDayOffApprovalServiceImpl",
+       "Optional rejection is informational only"),
+
+    tc("TC-DO-054",
+       "Update optional approver status — wrong person (not the approver)",
+       "Existing optional approval, authenticated as different employee",
+       "1. PATCH /api/vacation/v1/employee-dayOff-approvers/{id}\n"
+       "2. Body: {status: 'APPROVED'}\n"
+       "3. Authenticated as someone other than the optional approver",
+       "HTTP 403 or error\n"
+       "Only the optional approver themselves can update their status\n"
+       "Owner cannot approve on behalf of optional approver",
+       "High", "Security",
+       "EmployeeDayOffApprovalServiceImpl status update", "EmployeeDayOffApprovalServiceImpl",
+       "Self-service only. No delegation."),
+
+    tc("TC-DO-055",
+       "Delete optional approver",
+       "Existing optional approval, authenticated as owner or approver",
+       "1. DELETE /api/vacation/v1/employee-dayOff-approvers/{id}\n"
+       "2. Verify response\n"
+       "3. DB: verify record removed",
+       "Optional approver record deleted\n"
+       "Physical delete from employee_dayoff_approval table\n"
+       "No cascade effects on main request",
+       "Medium", "Functional",
+       "EmployeeDayOffApprovalController.delete", "EmployeeDayOffApprovalServiceImpl",
+       "Removal of optional approver is clean — no side effects"),
+
+    tc("TC-DO-056",
+       "Optional approver POST uses VACATIONS_VIEW (security gap)",
+       "User with VACATIONS_VIEW but NOT VACATIONS_CREATE",
+       "1. Authenticate as user with VIEW-only permission\n"
+       "2. POST /api/vacation/v1/employee-dayOff-approvers\n"
+       "3. Check if write operation succeeds",
+       "DESIGN ISSUE: POST controller uses @PreAuthorize VACATIONS_VIEW\n"
+       "Write operation protected only by VIEW permission\n"
+       "Any user with view access can add optional approvers\n"
+       "Should require VACATIONS_CREATE or VACATIONS_EDIT",
+       "Critical", "Security",
+       "DI: VACATIONS_VIEW for POST", "EmployeeDayOffApprovalController",
+       "Security gap: write operation behind read-only permission"),
+
+    tc("TC-DO-057",
+       "Optional approver PATCH uses VACATIONS_VIEW (security gap)",
+       "User with VACATIONS_VIEW but NOT VACATIONS_EDIT",
+       "1. Authenticate as user with VIEW-only permission\n"
+       "2. PATCH /api/vacation/v1/employee-dayOff-approvers/{id}\n"
+       "3. Check if status update succeeds",
+       "DESIGN ISSUE: PATCH controller uses @PreAuthorize VACATIONS_VIEW\n"
+       "Status update protected only by VIEW permission\n"
+       "However, service-level check (only optional approver can update) adds protection\n"
+       "Still: @PreAuthorize should match operation type",
+       "High", "Security",
+       "DI: VACATIONS_VIEW for PATCH", "EmployeeDayOffApprovalController",
+       "Defense in depth: @PreAuthorize too permissive, service check compensates"),
+
+    tc("TC-DO-058",
+       "Optional approver DELETE uses VACATIONS_VIEW (security gap)",
+       "User with VACATIONS_VIEW but NOT VACATIONS_DELETE",
+       "1. Authenticate as user with VIEW-only permission\n"
+       "2. DELETE /api/vacation/v1/employee-dayOff-approvers/{id}\n"
+       "3. Check if deletion succeeds",
+       "DESIGN ISSUE: DELETE controller uses @PreAuthorize VACATIONS_VIEW\n"
+       "Deletion protected only by VIEW permission\n"
+       "Service-level access check (owner/approver/manager) provides some protection\n"
+       "But @PreAuthorize mismatch is a security smell",
+       "High", "Security",
+       "DI: VACATIONS_VIEW for DELETE", "EmployeeDayOffApprovalController",
+       "All 3 write operations on optional approver use VIEW permission"),
+
+    tc("TC-DO-059",
+       "Approver change cascade — old approver becomes optional",
+       "Day-off with optional approvers, change main approver",
+       "1. Add optional approver X to day-off\n"
+       "2. PUT /api/vacation/v1/employee-dayOff/change-approver/{id}/{newLogin}\n"
+       "3. Check optional approvers list\n"
+       "4. DB: SELECT * FROM employee_dayoff_approval WHERE request_id=<id>",
+       "Old main approver added as optional approver with ASKED status\n"
+       "New main approver removed from optional list (if was optional)\n"
+       "Existing optional approvers unchanged\n"
+       "Cascade maintains referential consistency",
+       "High", "Functional",
+       "EmployeeDayOffServiceImpl.changeApprover", "EmployeeDayOffServiceImpl",
+       "Cascade: old main->optional(ASKED), new main removed from optional"),
+
+    tc("TC-DO-060",
+       "Auto-sync optional approvers on creation",
+       "Employee with default optional approvers configured",
+       "1. POST /api/vacation/v1/employee-dayOff\n"
+       "2. Body: valid day-off request (no explicit optional approvers)\n"
+       "3. Check optional approvers in response\n"
+       "4. DB: SELECT * FROM employee_dayoff_approval WHERE request_id=<new_id>",
+       "Optional approvers auto-synced from employee's default settings\n"
+       "Defaults pulled from employee configuration\n"
+       "All synced approvers start with ASKED status\n"
+       "Same mechanism as vacation optional approver sync",
+       "Medium", "Functional",
+       "EmployeeDayOffServiceImpl.create", "EmployeeDayOffServiceImpl",
+       "Auto-sync happens during creation, not after"),
+]
+
+
+# ── TS-DO-Permissions ──────────────────────────────────────────────
+
+TS_DO_PERMISSIONS = [
+    tc("TC-DO-061",
+       "Owner permissions on NEW request — full access",
+       "Day-off in NEW status, authenticated as owner",
+       "1. GET day-off permissions for owned NEW request\n"
+       "2. Check permission set",
+       "Owner gets: EDIT (unconditional) + DELETE (canBeCancelled=true for NEW)\n"
+       "EDIT: always granted to owner regardless of status\n"
+       "DELETE: granted because NEW != APPROVED",
+       "High", "Functional",
+       "EmployeeDayOffPermissionService", "EmployeeDayOffPermissionService",
+       "Owner gets EDIT always + DELETE when canBeCancelled"),
+
+    tc("TC-DO-062",
+       "Owner permissions on APPROVED request — EDIT but conditional DELETE",
+       "APPROVED day-off with personalDate in future, authenticated as owner",
+       "1. GET permissions for owned APPROVED request\n"
+       "2. Check EDIT and DELETE permissions separately",
+       "EDIT: granted (unconditional for owner)\n"
+       "DELETE: granted only if personalDate >= report period start\n"
+       "canBeCancelled = (status != APPROVED || personalDate >= reportPeriod)",
+       "High", "Functional",
+       "EmployeeDayOffPermissionService", "EmployeeDayOffPermissionService",
+       "EDIT unconditional, DELETE conditional on canBeCancelled"),
+
+    tc("TC-DO-063",
+       "Approver permissions on NEW request",
+       "Day-off in NEW status, authenticated as assigned approver",
+       "1. GET permissions for day-off where current user is approver\n"
+       "2. Check permission set",
+       "Approver gets: APPROVE + REJECT + EDIT_APPROVER\n"
+       "APPROVE: NEW in approvableStatuses {NEW, REJECTED}\n"
+       "REJECT: NEW in rejectableStatuses AND personalDate check\n"
+       "EDIT_APPROVER: always (unconditional)",
+       "High", "Functional",
+       "EmployeeDayOffPermissionService", "EmployeeDayOffPermissionService",
+       "Full approver permissions on NEW request"),
+
+    tc("TC-DO-064",
+       "Approver permissions on APPROVED request",
+       "APPROVED day-off, authenticated as approver",
+       "1. GET permissions for APPROVED day-off\n"
+       "2. Check permission set",
+       "APPROVE: not granted (APPROVED not in approvableStatuses)\n"
+       "REJECT: granted if personalDate >= report period\n"
+       "EDIT_APPROVER: granted (unconditional — design issue)",
+       "High", "Functional",
+       "EmployeeDayOffPermissionService", "EmployeeDayOffPermissionService",
+       "Approver can reject APPROVED but cannot re-approve"),
+
+    tc("TC-DO-065",
+       "readOnly user — no permissions",
+       "Employee with readOnly=true\n"
+       "Test data: SELECT login FROM employee WHERE read_only=true AND status='ACTIVE'",
+       "1. Authenticate as readOnly employee\n"
+       "2. Attempt any write operation on day-off\n"
+       "3. Check permission response",
+       "Empty permission set — no operations allowed\n"
+       "readOnly flag blocks ALL permissions\n"
+       "Non-ROLE_EMPLOYEE users also get empty permissions\n"
+       "Can still read/view day-offs (GET endpoints)",
+       "High", "Security",
+       "EmployeeDayOffPermissionService", "EmployeeDayOffPermissionService",
+       "readOnly users and non-ROLE_EMPLOYEE: zero write permissions"),
+
+    tc("TC-DO-066",
+       "Non-ROLE_EMPLOYEE user — no permissions",
+       "User without ROLE_EMPLOYEE (e.g. external contractor)",
+       "1. Authenticate as non-ROLE_EMPLOYEE user\n"
+       "2. Attempt to create day-off\n"
+       "3. Check response",
+       "No permissions granted\n"
+       "Permission service checks ROLE_EMPLOYEE first\n"
+       "@PreAuthorize AUTHENTICATED_USER passes but permission service blocks\n"
+       "Two-layer access control: auth + permission",
+       "Medium", "Security",
+       "EmployeeDayOffPermissionService", "EmployeeDayOffPermissionService",
+       "ROLE_EMPLOYEE is required for any day-off operation"),
+
+    tc("TC-DO-067",
+       "Shared VACATIONS_* authorities — cross-module permission leak",
+       "User with VACATIONS_VIEW/VACATIONS_APPROVE but no day-off specific permissions",
+       "1. Check @PreAuthorize on day-off controllers — uses VACATIONS_* authorities\n"
+       "2. User with vacation-only permissions accesses day-off endpoints\n"
+       "3. Verify access is granted or denied",
+       "DESIGN ISSUE: Day-off controllers use VACATIONS_* authorities\n"
+       "No separate DAYOFF_* permission set\n"
+       "User granted vacation permissions automatically gets day-off access\n"
+       "Cross-module permission leak — no granular control",
+       "High", "Security",
+       "DI: Shared VACATIONS_* authorities", "EmployeeDayOffController",
+       "All day-off endpoints use VACATIONS_VIEW/CREATE/EDIT/APPROVE/DELETE"),
+
+    tc("TC-DO-068",
+       "No CANCEL permission type (unlike vacation)",
+       "Compare vacation and day-off permission models",
+       "1. Review vacation permission types: includes CANCEL\n"
+       "2. Review day-off permission types: no CANCEL, uses DELETE instead\n"
+       "3. Test cancellation flow via DELETE endpoint",
+       "DESIGN ISSUE: No CANCEL permission type for day-offs\n"
+       "Vacation has separate CANCEL permission; day-off uses DELETE\n"
+       "Semantic difference: cancel vs delete\n"
+       "Inconsistent permission model across modules",
+       "Medium", "Functional",
+       "DI: No CANCEL permission", "EmployeeDayOffPermissionService",
+       "Day-off DELETE = vacation CANCEL. Different semantics, same effect."),
+
+    tc("TC-DO-069",
+       "EDIT_APPROVER on terminal status — approver can change approver on DELETED",
+       "DELETED day-off, authenticated as current approver",
+       "1. PUT /api/vacation/v1/employee-dayOff/change-approver/{id}/{newLogin}\n"
+       "2. Verify change succeeds despite DELETED status",
+       "DESIGN ISSUE: EDIT_APPROVER is always granted to approver\n"
+       "No status check for EDIT_APPROVER permission\n"
+       "Approver change succeeds on: DELETED, DELETED_FROM_CALENDAR, REJECTED\n"
+       "Functionally meaningless but creates unnecessary DB mutations",
+       "High", "Negative",
+       "DI: Unconditional EDIT_APPROVER", "EmployeeDayOffPermissionService",
+       "Bug confirmed: no status check in EDIT_APPROVER permission grant"),
+
+    tc("TC-DO-070",
+       "EDIT on terminal status — owner can PATCH DELETED_FROM_CALENDAR",
+       "DELETED_FROM_CALENDAR day-off, authenticated as owner",
+       "1. PATCH /api/vacation/v1/employee-dayOff/{id}\n"
+       "2. Body: {personalDate: <new date>}\n"
+       "3. Verify PATCH succeeds despite terminal status",
+       "DESIGN ISSUE: EDIT always granted to owner\n"
+       "Can update personalDate on system-deleted request\n"
+       "No business value — request was deleted by calendar system\n"
+       "Creates data inconsistency",
+       "High", "Negative",
+       "DI: Unconditional EDIT", "EmployeeDayOffPermissionService",
+       "Owner EDIT has zero status restrictions. Terminal states editable."),
+]
+
+
+# ── TS-DO-Validation ───────────────────────────────────────────────
+
+TS_DO_VALIDATION = [
+    tc("TC-DO-071",
+       "PublicDateValidator — null publicDate returns valid",
+       "Active employee",
+       "1. POST /api/vacation/v1/employee-dayOff\n"
+       "2. Body: publicDate: null, other fields valid\n"
+       "3. Check if custom validator accepts null",
+       "Null publicDate passes @EmployeeDayOffPublicDateExists validation\n"
+       "Custom validator returns true for null (standard pattern)\n"
+       "But missing @NotNull means null propagates to service layer\n"
+       "Possible NPE when service processes null publicDate",
+       "High", "Negative",
+       "EmployeeDayOffPublicDateExistsValidator", "EmployeeDayOffCreateRequestDTO",
+       "Validator null-pass pattern + missing @NotNull = null reaches service"),
+
+    tc("TC-DO-072",
+       "PersonalDateValidator — null personalDate returns valid",
+       "Active employee",
+       "1. POST /api/vacation/v1/employee-dayOff\n"
+       "2. Body: personalDate: null, other fields valid\n"
+       "3. Check if custom validator accepts null",
+       "Null personalDate passes @EmployeeDayOffPersonalDateExists validation\n"
+       "Same null-pass pattern as PublicDateValidator\n"
+       "Null personalDate propagates to service layer",
+       "High", "Negative",
+       "EmployeeDayOffPersonalDateExistsValidator", "EmployeeDayOffPatchRequestDTO",
+       "Both custom validators return true for null input"),
+
+    tc("TC-DO-073",
+       "originalDate — no validation at all",
+       "Active employee",
+       "1. POST /api/vacation/v1/employee-dayOff\n"
+       "2. Body: originalDate: '1900-01-01' (absurd date)\n"
+       "3. Check if request created with invalid originalDate",
+       "DESIGN ISSUE: originalDate has NO validation annotations\n"
+       "No @NotNull, no custom validator, no date range check\n"
+       "Any date value accepted including far past/future\n"
+       "originalDate is supposed to be the public holiday date but is not validated against calendar",
+       "High", "Negative",
+       "DI: No originalDate validation", "EmployeeDayOffCreateRequestDTO",
+       "publicDate is validated but originalDate (which stores the actual date) is not"),
+
+    tc("TC-DO-074",
+       "Frontend validation — zero client-side checks",
+       "Access day-off creation form in browser",
+       "1. Open day-off creation form in browser\n"
+       "2. Inspect form submission code (React components)\n"
+       "3. Submit empty form\n"
+       "4. Submit with invalid dates",
+       "DESIGN ISSUE: ZERO frontend validation\n"
+       "No Yup schema, no imperative validator\n"
+       "Empty form submission sends to server with no client feedback\n"
+       "All validation is 100% server-side\n"
+       "UX: user sees no errors until server responds",
+       "High", "Functional",
+       "DI: Zero frontend validation", "Frontend day-off components",
+       "All validation gaps: empty form, past dates, weekend, duplicate dates"),
+
+    tc("TC-DO-075",
+       "Frontend — empty form submission",
+       "Browser with day-off creation form open",
+       "1. Open day-off creation form\n"
+       "2. Do not fill any fields\n"
+       "3. Click submit\n"
+       "4. Observe behavior",
+       "No client-side error messages\n"
+       "Request sent to server with null/empty fields\n"
+       "Server returns 400 (or possibly 500 due to NPE)\n"
+       "User experience: delayed error feedback from server",
+       "Medium", "Functional",
+       "DI: Zero frontend validation", "Frontend components",
+       "Frontend sends invalid data, relies entirely on server error handling"),
+
+    tc("TC-DO-076",
+       "Frontend — past date selection allowed",
+       "Browser with day-off creation form open",
+       "1. Select a publicDate in the past\n"
+       "2. Submit form\n"
+       "3. Observe behavior",
+       "Frontend allows past date selection — no date picker restriction\n"
+       "Server rejects (date not in future calendar)\n"
+       "User sees error only after server response\n"
+       "Better UX: disable past dates in date picker",
+       "Medium", "Negative",
+       "DI: Zero frontend validation", "Frontend components",
+       "Date picker does not restrict to future dates"),
+
+    tc("TC-DO-077",
+       "Frontend — weekend/non-holiday date selectable",
+       "Browser with day-off creation form open",
+       "1. Select a regular workday (not a public holiday) as publicDate\n"
+       "2. Submit form\n"
+       "3. Observe server rejection",
+       "Frontend allows selecting any date including non-holidays\n"
+       "Server rejects: validation.PublicDateNotFoundInCalendar.message\n"
+       "Better UX: only show calendar public holidays in picker",
+       "Medium", "Negative",
+       "DI: Zero frontend validation", "Frontend components",
+       "Calendar data not used to constrain frontend date picker"),
+
+    tc("TC-DO-078",
+       "Error code: exception.employee.dayOff.no.permission",
+       "User without required permission attempting write operation",
+       "1. Attempt approve/reject/delete without proper permission\n"
+       "2. Check error response format\n"
+       "3. Verify error code and HTTP status",
+       "HTTP 403\n"
+       "errorCode: exception.employee.dayOff.no.permission\n"
+       "EmployeeDayOffSecurityException thrown\n"
+       "Error body includes exception class name (information disclosure)",
+       "Medium", "Functional",
+       "EmployeeDayOffSecurityException", "EmployeeDayOffServiceImpl",
+       "Verify consistent error format across all permission failures"),
+
+    tc("TC-DO-079",
+       "Error code: exception.day.off.crossing.vacation",
+       "Day-off personalDate overlapping existing vacation",
+       "1. POST /api/vacation/v1/employee-dayOff\n"
+       "2. Body: personalDate within approved vacation date range\n"
+       "3. Check error response",
+       "HTTP 400\n"
+       "errorCode: exception.day.off.crossing.vacation\n"
+       "DayOffCrossingVacationException\n"
+       "Cross-module validation between day-off and vacation",
+       "Medium", "Functional",
+       "DayOffCrossingVacationException", "EmployeeDayOffServiceImpl",
+       "Vacation-dayoff overlap protection"),
+
+    tc("TC-DO-080",
+       "Error code: validation.EmployeeDayOffPublicDateExists.message",
+       "Duplicate publicDate for same employee",
+       "1. Create day-off for publicDate X\n"
+       "2. Create another day-off for same publicDate X\n"
+       "3. Check error response",
+       "HTTP 400\n"
+       "errorCode: validation.EmployeeDayOffPublicDateExists.message\n"
+       "Duplicate check per employee (not global)\n"
+       "Different employees can have requests for same publicDate",
+       "Medium", "Functional",
+       "EmployeeDayOffPublicDateExistsValidator", "EmployeeDayOffCreateRequestDTO",
+       "Per-employee uniqueness, not system-wide"),
+
+    tc("TC-DO-081",
+       "Error code: validation.PublicDateNotFoundInCalendar.message",
+       "Date not in office calendar",
+       "1. POST /api/vacation/v1/employee-dayOff\n"
+       "2. Body: publicDate = date not in any calendar\n"
+       "3. Check error response",
+       "HTTP 400\n"
+       "errorCode: validation.PublicDateNotFoundInCalendar.message\n"
+       "Validator checks: office calendar OR employee's day-off calendar\n"
+       "Both must fail for this error",
+       "Medium", "Functional",
+       "EmployeeDayOffPublicDateExistsValidator", "EmployeeDayOffCreateRequestDTO",
+       "Two-source calendar lookup: office calendar + employee dayoff calendar"),
+
+    tc("TC-DO-082",
+       "CANCELED status — dead code in enum",
+       "Review EmployeeDayOffStatusType enum",
+       "1. Search codebase for CANCELED usage in day-off context\n"
+       "2. Attempt to set status to CANCELED via any means\n"
+       "3. Check if any code path assigns CANCELED",
+       "DESIGN ISSUE: CANCELED exists in enum but is never assigned\n"
+       "No code path sets status to CANCELED\n"
+       "Dead code — status value unreachable\n"
+       "DB may have zero records with CANCELED status",
+       "Low", "Functional",
+       "DI: CANCELED dead code", "EmployeeDayOffStatusType",
+       "Enum value exists, never used. Verify with DB: "
+       "SELECT COUNT(*) FROM employee_dayoff_request WHERE status='CANCELED'"),
+
+    tc("TC-DO-083",
+       "Duplicate setStatus call in entity conversion",
+       "Create or update day-off request and monitor conversion",
+       "1. Trace code path through entity conversion\n"
+       "2. Check if setStatus called twice during conversion\n"
+       "3. Verify final status is correct despite duplicate call",
+       "DESIGN ISSUE: Duplicate setStatus call in conversion code\n"
+       "Status set once by business logic, then overwritten by converter\n"
+       "Net effect: usually no bug (second call wins with same value)\n"
+       "Risk: if values differ, converter silently overrides business logic",
+       "Low", "Functional",
+       "DI: Duplicate setStatus", "Entity conversion",
+       "Cosmetic issue unless converter and service disagree on status"),
+
+    tc("TC-DO-084",
+       "Misleading field name: last_approved_date",
+       "Examine day-off request data in DB and API response",
+       "1. GET /api/vacation/v1/employee-dayOff/{id}\n"
+       "2. DB: SELECT last_approved_date, original_date FROM employee_dayoff_request\n"
+       "3. Compare values",
+       "DESIGN ISSUE: last_approved_date actually stores the public holiday date\n"
+       "Name suggests last approval timestamp\n"
+       "Actually equals originalDate (the public holiday)\n"
+       "Confusing for developers and testers",
+       "Low", "Functional",
+       "DI: Misleading field name", "employee_dayoff_request table",
+       "Field name does not reflect actual content. Documentation needed."),
+
+    tc("TC-DO-085",
+       "Null return from findApprovedByEmployeeAndDate",
+       "Query for employee+date combination with no approved day-off",
+       "1. Call service method that uses findApprovedByEmployeeAndDate\n"
+       "2. Pass employee/date with no matching APPROVED record\n"
+       "3. Check return value handling",
+       "DESIGN ISSUE: Method returns null instead of empty Optional/list\n"
+       "Callers must null-check\n"
+       "Missing null check = NPE\n"
+       "Should return Optional.empty() or Collections.emptyList()",
+       "Medium", "Negative",
+       "DI: Null return NPE risk", "EmployeeDayOffRepository",
+       "Repository returns null for no results. Service layer may NPE."),
+
+    tc("TC-DO-086",
+       "Hardcoded production URL in notifications",
+       "Trigger notification for day-off event, inspect email content",
+       "1. Create/approve day-off to trigger notification\n"
+       "2. Check email content via email MCP\n"
+       "3. Inspect URLs in notification body",
+       "DESIGN ISSUE: Notification contains hardcoded production URL\n"
+       "All environments send emails with production URL\n"
+       "Testing env emails link to production app\n"
+       "User clicking link goes to wrong environment",
+       "Low", "Functional",
+       "DI: Hardcoded production URL", "Notification templates",
+       "Notifications have production URL regardless of environment"),
+
+    tc("TC-DO-087",
+       "Random.nextLong() for synthetic IDs in findSoonDayOffs",
+       "Call endpoint that uses findSoonDayOffs (upcoming day-offs list)",
+       "1. GET endpoint that returns upcoming day-offs\n"
+       "2. Call multiple times\n"
+       "3. Check if synthetic IDs change between calls",
+       "DESIGN ISSUE: Random.nextLong() generates synthetic IDs\n"
+       "IDs are non-deterministic across calls\n"
+       "Cannot use ID for caching, deduplication, or reference\n"
+       "Risk: negative IDs possible (Random.nextLong range includes negatives)",
+       "Low", "Functional",
+       "DI: Random.nextLong for IDs", "findSoonDayOffs",
+       "Non-deterministic IDs break caching and client-side deduplication"),
+
+    tc("TC-DO-088",
+       "Search type MY — own requests with calendar and ledger merge",
+       "Authenticated employee with day-off requests",
+       "1. GET /api/vacation/v1/employee-dayOff?searchType=MY\n"
+       "2. Verify response includes own requests\n"
+       "3. Check calendar and ledger data merged into response",
+       "Returns employee's own day-off requests\n"
+       "Merged with calendar day data and ledger entries\n"
+       "Includes all statuses (NEW, APPROVED, REJECTED, etc.)\n"
+       "Most common search type for regular employees",
+       "High", "Functional",
+       "EmployeeDayOffController.findAll", "EmployeeDayOffSearchService",
+       "MY search is the primary user-facing view"),
+
+    tc("TC-DO-089",
+       "Search type ALL — admin view",
+       "Authenticated as admin/HR with VACATIONS_VIEW permission",
+       "1. GET /api/vacation/v1/employee-dayOff?searchType=ALL\n"
+       "2. Verify response includes all employees' requests\n"
+       "3. Check pagination",
+       "Returns all day-off requests across all employees\n"
+       "Admin-level view\n"
+       "Paginated response\n"
+       "Requires VACATIONS_VIEW permission",
+       "Medium", "Functional",
+       "EmployeeDayOffController.findAll", "EmployeeDayOffSearchService",
+       "Admin search for cross-organization visibility"),
+
+    tc("TC-DO-090",
+       "Search type APPROVER — requests pending approval",
+       "Authenticated as manager with day-offs pending their approval",
+       "1. GET /api/vacation/v1/employee-dayOff?searchType=APPROVER\n"
+       "2. Verify response includes requests where current user is approver",
+       "Returns day-off requests where current user is assigned approver\n"
+       "Typically filtered to actionable statuses (NEW, APPROVED for reject)\n"
+       "Used by approver dashboard",
+       "High", "Functional",
+       "EmployeeDayOffController.findAll", "EmployeeDayOffSearchService",
+       "Approver view for managing pending requests"),
+
+    tc("TC-DO-091",
+       "Search type OPTIONAL_APPROVER",
+       "Authenticated as optional approver for some day-offs",
+       "1. GET /api/vacation/v1/employee-dayOff?searchType=OPTIONAL_APPROVER\n"
+       "2. Verify response includes requests where user is optional approver",
+       "Returns requests where user is an optional (FYI) approver\n"
+       "Includes all approval statuses (ASKED, APPROVED, REJECTED)\n"
+       "Used for informational review",
+       "Medium", "Functional",
+       "EmployeeDayOffController.findAll", "EmployeeDayOffSearchService",
+       "Optional approver view — informational, not action-required"),
+
+    tc("TC-DO-092",
+       "Search type DELEGATED_TO_ME",
+       "Authenticated as delegate for another manager",
+       "1. GET /api/vacation/v1/employee-dayOff?searchType=DELEGATED_TO_ME\n"
+       "2. Verify response includes delegated requests",
+       "Returns day-off requests delegated to current user\n"
+       "Delegation: acting on behalf of absent manager\n"
+       "Includes requests where delegation chain leads to current user",
+       "Medium", "Functional",
+       "EmployeeDayOffController.findAll", "EmployeeDayOffSearchService",
+       "Delegation view for substitute approvers"),
+
+    tc("TC-DO-093",
+       "GET list endpoint — approved day-offs only",
+       "Authenticated employee",
+       "1. GET /api/vacation/v1/employee-dayOff/list\n"
+       "2. Check response contains only APPROVED requests",
+       "Returns only APPROVED day-off entries\n"
+       "Different from main GET / which returns all statuses\n"
+       "Used for display in calendar/summary views\n"
+       "@PreAuthorize: AUTHENTICATED_USER || VACATIONS_VIEW",
+       "Medium", "Functional",
+       "EmployeeDayOffController.findApproved", "EmployeeDayOffServiceImpl",
+       "Separate endpoint for approved-only list"),
+
+    tc("TC-DO-094",
+       "Approve flow — RecalculateVacationDaysHandler integration",
+       "NEW day-off, approve and verify vacation balance impact",
+       "1. GET current vacation days balance for employee\n"
+       "2. PUT /api/vacation/v1/employee-dayOff/approve/{id}\n"
+       "3. GET vacation days balance again\n"
+       "4. Compare before/after",
+       "RecalculateVacationDaysHandler fires after approve\n"
+       "Vacation day balance adjusts by diff (+1 credit, -1 debit)\n"
+       "Net effect depends on duration values\n"
+       "Cross-module: day-off approval affects vacation balance",
+       "Critical", "Integration",
+       "RecalculateVacationDaysHandler", "Event handlers",
+       "Day-off approve -> vacation recalculation. Critical cross-module test."),
+
+    tc("TC-DO-095",
+       "Approve flow — UpdateMonthNormHandler integration",
+       "NEW day-off with personalDate in different month than originalDate",
+       "1. Approve day-off where months differ\n"
+       "2. Check monthly norm recalculation for both months\n"
+       "3. DB: SELECT * FROM employee_month_norm WHERE employee_id=<id>",
+       "UpdateMonthNormHandler recalculates norms for both months:\n"
+       "  - Month of lastApprovedDate (credit month)\n"
+       "  - Month of personalDate (debit month)\n"
+       "Both months' norms adjusted\n"
+       "Important when months cross reporting periods",
+       "High", "Integration",
+       "UpdateMonthNormHandler", "Event handlers",
+       "Two-month norm update when credit and debit are in different months"),
+
+    tc("TC-DO-096",
+       "Search type MY_DEPARTMENT",
+       "Authenticated as department manager",
+       "1. GET /api/vacation/v1/employee-dayOff?searchType=MY_DEPARTMENT\n"
+       "2. Verify response includes department members' requests",
+       "Returns day-off requests from all employees in user's department\n"
+       "Department scope — broader than APPROVER (which is direct reports only)\n"
+       "Used by department managers for team overview",
+       "Medium", "Functional",
+       "EmployeeDayOffController.findAll", "EmployeeDayOffSearchService",
+       "Department-level visibility for managers"),
+
+    tc("TC-DO-097",
+       "Search type RELATED",
+       "Authenticated employee on same project/team as others",
+       "1. GET /api/vacation/v1/employee-dayOff?searchType=RELATED\n"
+       "2. Verify response includes related employees' requests",
+       "Returns day-off requests from related employees\n"
+       "Related = same project, same team, or organizational connection\n"
+       "Used for coordination and awareness",
+       "Medium", "Functional",
+       "EmployeeDayOffController.findAll", "EmployeeDayOffSearchService",
+       "Relationship-based search for team coordination"),
+
+    tc("TC-DO-098",
+       "Create day-off — originalDate vs publicDate mismatch",
+       "Active employee, send different originalDate and publicDate",
+       "1. POST /api/vacation/v1/employee-dayOff\n"
+       "2. Body: originalDate: '2026-05-01', publicDate: '2026-05-09'\n"
+       "3. Check which date is validated and stored",
+       "publicDate validated against calendar (custom validator)\n"
+       "originalDate has NO validation — stored as-is\n"
+       "Mismatch creates inconsistent record\n"
+       "originalDate should equal publicDate but nothing enforces this",
+       "High", "Negative",
+       "DI: No originalDate validation", "EmployeeDayOffCreateRequestDTO",
+       "Two date fields that should match but are validated independently"),
+
+    tc("TC-DO-099",
+       "Approve — ledger fallback chain for credit duration",
+       "NEW day-off where no existing ledger entry and no calendar entry for date",
+       "1. Set up: ensure no existing ledger and no calendar match\n"
+       "2. Approve the day-off\n"
+       "3. Check credit ledger entry duration value",
+       "Fallback chain for credit duration:\n"
+       "1. Existing ledger entry for employee+date -> use its duration\n"
+       "2. Calendar day for date -> use calendar duration\n"
+       "3. Reporting norm fallback -> use 8h default\n"
+       "Verify correct fallback is used when earlier sources are empty",
+       "Medium", "Functional",
+       "EmployeeDayOffServiceImpl.changeDayOffDaysAfterApprove", "EmployeeDayOffServiceImpl",
+       "Three-tier fallback: ledger -> calendar -> norm(8h)"),
+
+    tc("TC-DO-100",
+       "Half-day duration (7h) handling",
+       "Day-off for a half-working day (calendar duration=7h)",
+       "1. Identify half-working day in calendar (duration=7)\n"
+       "2. Create day-off with that date as publicDate\n"
+       "3. Approve and check ledger entries",
+       "Credit ledger entry: duration=7 (half-day)\n"
+       "Debit ledger entry: duration=0 (standard debit marker)\n"
+       "Vacation balance impact differs from full-day\n"
+       "DB: 27 half-day entries found in timemachine env",
+       "Medium", "Boundary",
+       "EmployeeDayOffServiceImpl", "EmployeeDayOffServiceImpl",
+       "Half-day (7h) vs full-day (8h) credit handling"),
+
+    tc("TC-DO-101",
+       "Approve — vacation recalculation diff calculation",
+       "Approve day-off and verify exact diff passed to vacation recalculation",
+       "1. Approve day-off\n"
+       "2. Trace RecalculateVacationDaysHandler parameters\n"
+       "3. Verify diff value (+1 for credit, -1 for debit)",
+       "Diff calculation: credit creates +1, debit creates -1\n"
+       "Net diff determines vacation balance change\n"
+       "Correct diff is critical for accurate vacation tracking\n"
+       "Incorrect diff leads to vacation balance drift over time",
+       "High", "Integration",
+       "RecalculateVacationDaysHandler", "Event handlers",
+       "Diff accuracy is critical for vacation balance integrity"),
+
+    tc("TC-DO-102",
+       "Bulk operations — data patterns from timemachine env",
+       "Use timemachine env data for verification",
+       "1. DB: SELECT status, COUNT(*) FROM employee_dayoff_request GROUP BY status\n"
+       "2. DB: SELECT COUNT(*) FROM employee_dayoff\n"
+       "3. DB: SELECT status, COUNT(*) FROM employee_dayoff_approval GROUP BY status\n"
+       "4. Compare with expected distributions",
+       "Expected distribution (timemachine):\n"
+       "  Requests: 89.6% APPROVED, 6.9% DELETED, 2.5% DELETED_FROM_CALENDAR, "
+       "0.6% NEW, 0.4% REJECTED\n"
+       "  Ledger: 2,853 credit (8h), 2,454 debit (0h), 27 half-day (7h)\n"
+       "  Approvals: 62% ASKED, 38% APPROVED, 1 REJECTED\n"
+       "  Credit > debit: ~399 unused credits",
+       "Medium", "Functional",
+       "Data verification", "Database",
+       "Baseline data pattern verification against known distribution"),
+
+    tc("TC-DO-103",
+       "Pagination on GET all endpoint",
+       "Authenticated user with many day-off requests",
+       "1. GET /api/vacation/v1/employee-dayOff?page=0&size=10\n"
+       "2. GET /api/vacation/v1/employee-dayOff?page=1&size=10\n"
+       "3. Verify pagination metadata and content",
+       "Paginated response with totalElements, totalPages\n"
+       "Page content matches requested size\n"
+       "No duplicates across pages\n"
+       "Sort order consistent across pages",
+       "Medium", "Functional",
+       "EmployeeDayOffController.findAll", "EmployeeDayOffController",
+       "Standard Spring pagination. Verify no data loss between pages."),
+
+    tc("TC-DO-104",
+       "GET day-off by non-existent ID",
+       "Non-existent day-off ID",
+       "1. GET /api/vacation/v1/employee-dayOff with filter for id=999999999\n"
+       "2. Check response",
+       "Empty result set or 404\n"
+       "No NPE or 500 error\n"
+       "Graceful handling of non-existent resources",
+       "Low", "Negative",
+       "EmployeeDayOffController", "EmployeeDayOffServiceImpl",
+       "Basic robustness: non-existent resource handling"),
+
+    tc("TC-DO-105",
+       "Approve day-off — notification to optional approvers",
+       "Day-off with optional approvers in ASKED status, approve the request",
+       "1. Add optional approvers to day-off\n"
+       "2. Approve the day-off as main approver\n"
+       "3. Check email notifications sent\n"
+       "4. Check optional approver statuses remain ASKED",
+       "Main request approved\n"
+       "Optional approvers notified of approval\n"
+       "Optional approver statuses NOT changed (remain ASKED)\n"
+       "FYI notification only — optional approvers can still respond",
+       "Medium", "Functional",
+       "EmployeeDayOffServiceImpl.approve", "Notification service",
+       "Optional approvers get notification but their status is independent"),
+
+    tc("TC-DO-106",
+       "Create day-off for employee in different office (cross-office calendar)",
+       "Employee whose office calendar does NOT have the specified publicDate",
+       "1. POST /api/vacation/v1/employee-dayOff\n"
+       "2. Body: publicDate from a different office's calendar\n"
+       "3. Check error response",
+       "HTTP 400: validation.PublicDateNotFoundInCalendar.message\n"
+       "Validator checks employee's office calendar specifically\n"
+       "Public holidays are office-specific\n"
+       "Cross-office dates not interchangeable",
+       "Medium", "Negative",
+       "EmployeeDayOffPublicDateExistsValidator", "EmployeeDayOffCreateRequestDTO",
+       "Calendar validation is office-scoped. Different offices = different holidays."),
+
+    tc("TC-DO-107",
+       "Concurrent approve and delete on same request",
+       "Day-off in NEW status, two concurrent requests",
+       "1. Simultaneously:\n"
+       "   a. PUT /api/vacation/v1/employee-dayOff/approve/{id} (as approver)\n"
+       "   b. DELETE /api/vacation/v1/employee-dayOff/{id} (as owner)\n"
+       "2. Check final state",
+       "Race condition: no optimistic locking\n"
+       "Scenario 1: approve wins -> APPROVED + ledger, then delete fails (if canBeCancelled)\n"
+       "Scenario 2: delete wins -> DELETED, then approve fails (DELETED not approvable)\n"
+       "Risk: both succeed -> DELETED with orphaned ledger entries",
+       "High", "Integration",
+       "DI: No transaction isolation", "EmployeeDayOffServiceImpl",
+       "No optimistic locking or version field to prevent concurrent mutations"),
+
+    tc("TC-DO-108",
+       "Approve day-off — verify event publishing",
+       "NEW day-off, approve and check event chain",
+       "1. PUT /api/vacation/v1/employee-dayOff/approve/{id}\n"
+       "2. Check event: EmployeeDayOffCreatedEvent (on create)\n"
+       "3. Verify handlers: RecalculateVacationDaysHandler, UpdateMonthNormHandler\n"
+       "4. Verify downstream effects",
+       "Events published:\n"
+       "  - Status change triggers downstream handlers\n"
+       "  - RecalculateVacationDaysHandler: vacation balance update\n"
+       "  - UpdateMonthNormHandler: monthly norm update\n"
+       "  - Notification events: email to employee",
+       "Medium", "Integration",
+       "Event publishing", "EmployeeDayOffServiceImpl",
+       "Verify complete event chain from approve through all handlers"),
+]
+
+
+# ── Plan Overview ──────────────────────────────────────────────────
+
+def create_plan_overview(wb):
+    ws = wb.active
+    ws.title = "Plan Overview"
+    ws.sheet_properties.tabColor = TAB_COLOR_PLAN
+
+    # Title
+    ws.merge_cells("A1:J1")
+    ws.cell(row=1, column=1, value="Day-Off Module — Test Plan").font = FONT_TITLE
+
+    ws.merge_cells("A2:J2")
+    ws.cell(row=2, column=1,
+            value=f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')} | Phase B | Branch: release/2.1"
+            ).font = FONT_SMALL
+
+    # Scope section
+    r = 4
+    ws.cell(row=r, column=1, value="1. Scope & Objectives").font = FONT_SUBTITLE
+    r += 1
+    scope_text = (
+        "Comprehensive test coverage for the Day-Off module of TTT (Time Tracking Tool). "
+        "Day-offs compensate employees for working on public holidays — the employee works the holiday "
+        "and takes a different day off instead. The module uses a dual-entity pattern: "
+        "employee_dayoff_request (workflow/status) and employee_dayoff (ledger/accounting).\n\n"
+        "Covers: CRUD operations, approval workflow with ledger mechanics, calendar conflict resolution "
+        "(DELETED_FROM_CALENDAR, system rejection, office change auto-delete), optional FYI approvers, "
+        "role-based permissions with known design issues (unconditional EDIT/EDIT_APPROVER, shared "
+        "VACATIONS_* authorities), and validation gaps (zero frontend validation, missing @NotNull).\n\n"
+        "Status model: NEW -> APPROVED/REJECTED/DELETED/DELETED_FROM_CALENDAR (CANCELED is dead code). "
+        "16 design issues documented. Test cases include API calls with example payloads and DB queries."
+    )
+    ws.merge_cells(f"A{r}:J{r}")
+    ws.cell(row=r, column=1, value=scope_text).font = FONT_BODY
+    ws.cell(row=r, column=1).alignment = ALIGN_LEFT
+    ws.row_dimensions[r].height = 120
+
+    # Environment section
+    r += 2
+    ws.cell(row=r, column=1, value="2. Environment Requirements").font = FONT_SUBTITLE
+    r += 1
+    env_items = [
+        ("Primary Test Env", "timemachine (ttt-timemachine.noveogroup.com) — clock manipulation available"),
+        ("Secondary Test Env", "qa-1 (ttt-qa-1.noveogroup.com) — standard testing"),
+        ("Production Baseline", "stage (ttt-stage.noveogroup.com) — comparison only"),
+        ("Authentication", "JWT (browser login) + API token (API_SECRET_TOKEN header)"),
+        ("Database", "PostgreSQL (ttt schema) — SELECT for verification"),
+        ("Test Users", "Multiple roles: employee, DM/CPO, PM, accountant, admin, readOnly"),
+        ("Clock Control", "PATCH /api/ttt/test/v1/clock for date-dependent tests (timemachine only)"),
+        ("API Base URLs", "/api/vacation/v1/employee-dayOff, /api/vacation/v1/employee-dayOff-approvers"),
+    ]
+    for label, desc in env_items:
+        ws.cell(row=r, column=1, value=label).font = FONT_SECTION
+        ws.cell(row=r, column=2, value=desc).font = FONT_BODY
+        ws.cell(row=r, column=2).alignment = ALIGN_LEFT
+        r += 1
+
+    # Test suites section
+    r += 1
+    ws.cell(row=r, column=1, value="3. Test Suites").font = FONT_SUBTITLE
+    r += 1
+
+    suites = [
+        ("TS-DO-CRUD", "Create, Edit, Delete Flows", len(TS_DO_CRUD),
+         "Creation flow, PATCH personalDate, DELETE lifecycle, DTO validation gaps, "
+         "upsert overwrite risk, duration boundary values"),
+        ("TS-DO-Approval", "Approve, Reject, Change Approver", len(TS_DO_APPROVAL),
+         "Approval with ledger creation, rejection, re-approval, approver change cascade, "
+         "system rejection, non-atomic transaction risk"),
+        ("TS-DO-Calendar", "Calendar Conflicts & Office Change", len(TS_DO_CALENDAR),
+         "DELETED_FROM_CALENDAR cascade, physical ledger deletion, office change auto-delete, "
+         "PAGE_SIZE=100 limit, CalendarUpdateHasDayOffConflictEvent, race conditions"),
+        ("TS-DO-OptApprover", "Optional Approver Lifecycle", len(TS_DO_OPT_APPROVER),
+         "FYI approver add/update/delete, 4 create constraints, access validation, "
+         "approver change cascade, VACATIONS_VIEW security gaps"),
+        ("TS-DO-Permissions", "Permissions & Access Control", len(TS_DO_PERMISSIONS),
+         "Owner vs approver permissions, unconditional EDIT/EDIT_APPROVER, readOnly blocking, "
+         "shared VACATIONS_* authorities, no CANCEL permission type"),
+        ("TS-DO-Validation", "Validation, Errors & Edge Cases", len(TS_DO_VALIDATION),
+         "Error codes, null validator pass-through, zero frontend validation, search types, "
+         "dead code (CANCELED), data patterns, integration events, concurrency"),
+    ]
+
+    headers = ["Suite ID", "Suite Name", "Cases", "Description"]
+    for col, h in enumerate(headers, 1):
+        cell = ws.cell(row=r, column=col, value=h)
+        cell.font = FONT_HEADER
+        cell.fill = FILL_GREEN_HEADER
+        cell.alignment = ALIGN_CENTER
+        cell.border = THIN_BORDER
+    r += 1
+
+    total_cases = 0
+    for suite_id, name, count, desc in suites:
+        fill = FILL_ROW_EVEN if (r % 2 == 0) else FILL_ROW_ODD
+        ws.cell(row=r, column=1, value=suite_id).font = FONT_LINK_BOLD
+        ws.cell(row=r, column=1).hyperlink = f"#'{suite_id}'!A1"
+        ws.cell(row=r, column=1).fill = fill
+        ws.cell(row=r, column=1).border = THIN_BORDER
+        write_row(ws, r, [None, name, count, desc], fill=fill)
+        ws.cell(row=r, column=1, value=suite_id)
+        ws.cell(row=r, column=1).font = FONT_LINK_BOLD
+        ws.cell(row=r, column=1).hyperlink = f"#'{suite_id}'!A1"
+        total_cases += count
+        r += 1
+
+    # Total row
+    ws.cell(row=r, column=1, value="TOTAL").font = FONT_SECTION
+    ws.cell(row=r, column=3, value=total_cases).font = FONT_SECTION
+    ws.cell(row=r, column=3).alignment = ALIGN_CENTER
+    r += 2
+
+    # Key metrics
+    ws.cell(row=r, column=1, value="4. Key Metrics").font = FONT_SUBTITLE
+    r += 1
+    metrics = [
+        ("Total Test Cases", str(total_cases)),
+        ("Design Issues Covered", "16 (unconditional permissions, missing validation, dead code, "
+         "security gaps, non-atomic transactions, PAGE_SIZE limit)"),
+        ("Security Issues", "5 (VACATIONS_VIEW for writes, shared authorities, "
+         "unconditional EDIT_APPROVER, cross-module permission leak)"),
+        ("Boundary Tests", "4 (zero duration, negative duration, half-day 7h, PAGE_SIZE=100)"),
+        ("Integration Tests", "6 (vacation recalculation, month norm, calendar events, concurrency)"),
+        ("Status Model", "6 values (NEW, APPROVED, REJECTED, DELETED, DELETED_FROM_CALENDAR, "
+         "CANCELED=dead code)"),
+        ("Error Codes Covered", "4 (no.permission, crossing.vacation, PublicDateExists, "
+         "PublicDateNotFoundInCalendar)"),
+    ]
+    for label, value in metrics:
+        ws.cell(row=r, column=1, value=label).font = FONT_SECTION
+        ws.cell(row=r, column=2, value=value).font = FONT_BODY
+        r += 1
+
+    # Column widths
+    ws.column_dimensions["A"].width = 25
+    ws.column_dimensions["B"].width = 50
+    ws.column_dimensions["C"].width = 10
+    ws.column_dimensions["D"].width = 80
+    for c in "EFGHIJ":
+        ws.column_dimensions[c].width = 15
+
+
+# ── Feature Matrix ─────────────────────────────────────────────────
+
+def create_feature_matrix(wb):
+    ws = wb.create_sheet("Feature Matrix")
+    ws.sheet_properties.tabColor = TAB_COLOR_PLAN
+
+    ws.cell(row=1, column=1, value="<- Back to Plan").font = FONT_LINK
+    ws.cell(row=1, column=1).hyperlink = "#'Plan Overview'!A1"
+
+    ws.merge_cells("A2:H2")
+    ws.cell(row=2, column=1, value="Feature x Test Type Coverage Matrix").font = FONT_SUBTITLE
+
+    headers = ["Feature", "Functional", "Negative", "Boundary", "Security", "Integration", "Total", "Suite Link"]
+    r = 4
+    for col, h in enumerate(headers, 1):
+        cell = ws.cell(row=r, column=col, value=h)
+        cell.font = FONT_HEADER
+        cell.fill = FILL_HEADER
+        cell.alignment = ALIGN_CENTER
+        cell.border = THIN_BORDER
+
+    features = [
+        ("Create/Edit/Delete",   8,  8, 3, 1, 0, "TS-DO-CRUD"),
+        ("Approval Workflow",    8,  4, 0, 1, 3, "TS-DO-Approval"),
+        ("Calendar Conflicts",   5,  1, 1, 0, 2, "TS-DO-Calendar"),
+        ("Optional Approvers",   5,  4, 0, 3, 3, "TS-DO-OptApprover"),
+        ("Permissions & Access",  3,  3, 0, 4, 0, "TS-DO-Permissions"),
+        ("Validation & Errors", 14,  8, 2, 0, 4, "TS-DO-Validation"),
+    ]
+
+    r += 1
+    for feat, func, neg, bnd, sec, intg, suite in features:
+        total = func + neg + bnd + sec + intg
+        fill = FILL_ROW_EVEN if (r % 2 == 0) else FILL_ROW_ODD
+        write_row(ws, r, [feat, func, neg, bnd, sec, intg, total, None], fill=fill)
+        ws.cell(row=r, column=8, value=suite).font = FONT_LINK
+        ws.cell(row=r, column=8).hyperlink = f"#'{suite}'!A1"
+        ws.cell(row=r, column=8).fill = fill
+        ws.cell(row=r, column=8).border = THIN_BORDER
+        r += 1
+
+    # Totals
+    total_func = sum(f[1] for f in features)
+    total_neg = sum(f[2] for f in features)
+    total_bnd = sum(f[3] for f in features)
+    total_sec = sum(f[4] for f in features)
+    total_intg = sum(f[5] for f in features)
+    grand = total_func + total_neg + total_bnd + total_sec + total_intg
+    ws.cell(row=r, column=1, value="TOTAL").font = FONT_SECTION
+    for col, val in enumerate([total_func, total_neg, total_bnd, total_sec, total_intg, grand], 2):
+        ws.cell(row=r, column=col, value=val).font = FONT_SECTION
+        ws.cell(row=r, column=col).alignment = ALIGN_CENTER
+
+    col_widths = [30, 12, 12, 12, 12, 12, 10, 20]
+    for i, w in enumerate(col_widths, 1):
         ws.column_dimensions[get_column_letter(i)].width = w
 
 
-# ── Test Suite Definitions ──────────────────────────────────────────────────
-# Each suite: (tab_name, title, cases_list)
-# Each case: (id, title, preconditions, steps, expected, priority, type, req_ref, component, notes)
-
-SUITES = []
-
-# ══════════════════════════════════════════════════════════════════════════════
-# TS-DO-Lifecycle — Request Lifecycle (Create/Approve/Reject/Delete/Edit)
-# ══════════════════════════════════════════════════════════════════════════════
-SUITES.append(("TS-DO-Lifecycle", "Day-Off Request Lifecycle", [
-    ("TC-DO-001", "Create day-off transfer request for future holiday",
-     "Logged in as employee. Production calendar has future public holiday (e.g. 2026-05-01 May Day). No existing day-off request for that date.",
-     "1. Navigate to /vacation/my → Days off tab\n2. Click edit (pencil) icon on future holiday row with duration=0\n3. TransferDaysoffModal opens\n4. Select a valid working day as personal date (e.g. 2026-05-11)\n5. Click OK",
-     "New day-off request created with status NEW. Row shows arrow format: '01.05.2026 → 11.05.2026'. Cancel (X) button appears. Approver auto-assigned (employee's manager or self for CPO).",
-     "High", "Functional", "REQ-day-off", "frontend-day-off-module, day-off-service", ""),
-
-    ("TC-DO-002", "Create day-off — CPO self-approval on creation",
-     "Logged in as user with PROJECT role (CPO). Employee is their own manager.",
-     "1. Create day-off transfer request via UI\n2. Check request status immediately",
-     "Request created with status APPROVED (not NEW). Self-approval applied automatically. Manager becomes optional approver with ASKED status.",
-     "High", "Functional", "", "day-off-service", "CPO self-approve pattern: approver=self, manager→optional"),
-
-    ("TC-DO-003", "Create day-off — optional approvers assigned",
-     "Logged in as employee with configured optional approvers.",
-     "1. Create day-off request\n2. GET /v1/employee-dayOff/{id} to check response\n3. Inspect optionalApprovers array",
-     "Optional approvers present with status ASKED. Each has individual approve/reject capability (non-blocking FYI-style).",
-     "Medium", "Functional", "", "day-off-service", "employee_dayoff_approval table populated"),
-
-    ("TC-DO-004", "Approve NEW request by primary approver",
-     "Logged in as approver. Existing NEW day-off request for another employee.",
-     "1. Navigate to /vacation/request → Days off rescheduling → Approval tab\n2. Click approve (checkmark) on NEW request\n3. Confirm approval",
-     "Status changes to APPROVED. Two ledger entries created (credit for holiday + debit for personal day). Vacation days recalculated. Month norms updated.",
-     "High", "Functional", "", "day-off-service", "Critical: verify 2 ledger entries + vacation recalc"),
-
-    ("TC-DO-005", "Approve REJECTED request (re-approve)",
-     "Existing REJECTED day-off request.",
-     "1. PUT /v1/employee-dayOff/approve/{id}\n2. Check status and ledger",
-     "Status changes from REJECTED to APPROVED. New ledger entries created. Previous orphaned ledger entries (if any from prior approve) remain — compounding.",
-     "High", "Functional", "", "day-off-service", "BUG-DO-6 context: orphaned entries accumulate"),
-
-    ("TC-DO-006", "Reject NEW request",
-     "Logged in as approver. Existing NEW day-off request.",
-     "1. Click reject icon on NEW request in Approval tab\n2. Confirm rejection",
-     "Status changes to REJECTED. No ledger entries created (none existed). Employee notified.",
-     "High", "Functional", "", "day-off-service", "Clean reject — no ledger to revert"),
-
-    ("TC-DO-007", "Reject APPROVED request (personalDate >= report period start)",
-     "Existing APPROVED request with personalDate in future (>= current report period start).",
-     "1. PUT /v1/employee-dayOff/reject/{id}\n2. Check status and ledger entries",
-     "Status changes to REJECTED. BUG: Ledger entries from approval NOT reverted — orphaned credit/debit entries remain in employee_dayoff table.",
-     "High", "Bug verification", "BUG-DO-6", "day-off-service", "Known bug: reject does not undo ledger"),
-
-    ("TC-DO-008", "Reject APPROVED request (personalDate < report period start) — blocked",
-     "Existing APPROVED request with personalDate before current report period start.",
-     "1. PUT /v1/employee-dayOff/reject/{id}\n2. Check response",
-     "Rejection blocked — personalDate is in a closed period. Error returned.",
-     "High", "Negative", "", "day-off-service", "Guard: personalDate >= report period start"),
-
-    ("TC-DO-009", "Delete NEW request by owner",
-     "Logged in as request owner. Existing NEW day-off request.",
-     "1. Click cancel (X) button on NEW request row\n2. Confirm deletion",
-     "Status set to DELETED. Row disappears from default view. No ledger entries affected (none existed).",
-     "High", "Functional", "", "frontend-day-off-module", "Cancel postponement = DELETE endpoint"),
-
-    ("TC-DO-010", "Delete APPROVED request (personalDate in future)",
-     "Existing APPROVED request with personalDate >= period start (future).",
-     "1. DELETE /v1/employee-dayOff/{id}\n2. Check status",
-     "Status set to DELETED. Ledger entries from approval remain orphaned (not cleaned up on delete).",
-     "Medium", "Functional", "", "day-off-service", "Delete allowed when personalDate >= period start"),
-
-    ("TC-DO-011", "Delete APPROVED request (personalDate before period) — blocked",
-     "Existing APPROVED request with personalDate < current period start.",
-     "1. DELETE /v1/employee-dayOff/{id}\n2. Check response",
-     "Deletion blocked — cannot delete APPROVED request in closed period.",
-     "High", "Negative", "", "day-off-service", "Guard: personalDate >= period start OR status != APPROVED"),
-
-    ("TC-DO-012", "Change primary approver",
-     "Existing request (any status). Logged in as current approver.",
-     "1. PUT /v1/employee-dayOff/change-approver/{id}/{newLogin}\n2. Check request approver field",
-     "New approver assigned. Old approver moved to optional approvers list. Old approver removed from optional list if already present.",
-     "Medium", "Functional", "", "day-off-service", ""),
-
-    ("TC-DO-013", "Change approver — old becomes optional, new removed from optional",
-     "Request has optional approver 'userB'. Primary approver is 'userA'.",
-     "1. PUT /v1/employee-dayOff/change-approver/{id}/userB\n2. Inspect optionalApprovers",
-     "userB becomes primary approver. userA becomes optional. userB removed from optional list (no duplicate).",
-     "Medium", "Functional", "", "day-off-service", "Bidirectional swap logic"),
-
-    ("TC-DO-014", "Optional approver votes APPROVED",
-     "Request has optional approver with status ASKED.",
-     "1. As optional approver, PATCH approval status to APPROVED\n2. Check employee_dayoff_approval table",
-     "Optional approval status changes to APPROVED. Main request status unchanged (non-blocking). ApproveBar shows updated vote count.",
-     "Medium", "Functional", "", "day-off-service", "FYI-style: does not affect main approval"),
-
-    ("TC-DO-015", "Optional approver votes REJECTED (non-blocking)",
-     "Request has optional approver with status ASKED.",
-     "1. As optional approver, PATCH approval status to REJECTED\n2. Check main request status",
-     "Optional approval status = REJECTED. Main request status unchanged — optional rejection does not block approval.",
-     "Medium", "Functional", "", "day-off-service", "Non-blocking: only primary approver controls lifecycle"),
-
-    ("TC-DO-016", "Edit request — change personalDate",
-     "Existing NEW request owned by current user.",
-     "1. PATCH /v1/employee-dayOff/{id} with new personalDate\n2. Check updated fields",
-     "personalDate updated. Optional approvals reset to ASKED. Only personalDate is changeable via PATCH.",
-     "High", "Functional", "", "day-off-service", "Edit resets optional approvals"),
-
-    ("TC-DO-017", "Edit request — attempt to change publicDate (immutable)",
-     "Existing request.",
-     "1. PATCH /v1/employee-dayOff/{id} with different publicDate/originalDate\n2. Check response",
-     "publicDate/originalDate unchanged — only personalDate is editable. Other fields silently ignored or rejected.",
-     "Medium", "Negative", "", "day-off-service", "original_date is immutable"),
-
-    ("TC-DO-018", "System rejection — period change triggers bulk reject",
-     "Multiple NEW requests exist with last_approved_date = target date. Approve period changed.",
-     "1. Admin changes approve period for office\n2. PeriodChangedEventHandler fires\n3. Check affected requests",
-     "All NEW requests with matching last_approved_date → status REJECTED. NOTIFY_DAYOFF_AUTODELETE_TO_EMPLOYEE sent. APPROVED requests NOT affected.",
-     "High", "Integration", "", "day-off-service, accounting-backend", "Path C: only NEW status affected"),
-
-    ("TC-DO-019", "Create request on past holiday",
-     "Production calendar has holiday in the past (e.g., 2026-02-23).",
-     "1. POST /v1/employee-dayOff with publicDate = 2026-02-23\n2. Check response",
-     "Request created. Past holidays are valid source dates. TransferDaysoffModal minDate = yesterday (not originalDate) for past holidays.",
-     "Medium", "Boundary", "", "day-off-service", "Past holidays: minDate shifts to yesterday"),
-
-    ("TC-DO-020", "Full lifecycle: create → approve → verify ledger → vacation balance",
-     "Clean state employee with known vacation balance.",
-     "1. Create day-off request (POST)\n2. Approve (PUT /approve/{id})\n3. GET employee vacation days\n4. Query employee_dayoff table for 2 new entries\n5. Query vacation balance",
-     "Ledger: entry 1 = credit (holiday, duration from calendar/norm), entry 2 = debit (personal day, duration from request). Vacation balance: net zero change (credit +1, debit -1 cancel out).",
-     "High", "Integration", "", "day-off-service, vacation-service", "Confirmed: vacation balance unaffected by day-offs"),
-]))
-
-# ══════════════════════════════════════════════════════════════════════════════
-# TS-DO-Ledger — Credit/Debit Ledger Mechanics
-# ══════════════════════════════════════════════════════════════════════════════
-SUITES.append(("TS-DO-Ledger", "Day-Off Ledger Mechanics", [
-    ("TC-DO-021", "Approve writes 2 ledger entries (credit + debit)",
-     "NEW day-off request exists. employee_dayoff table has no entries for this request's dates.",
-     "1. PUT /v1/employee-dayOff/approve/{id}\n2. SELECT * FROM employee_dayoff WHERE employee = {empId} AND (personal_date = {personalDate} OR personal_date = {lastApprovedDate})",
-     "Two new rows in employee_dayoff: (1) lastApprovedDate slot — credit reversal with duration from calendar/norm, (2) personalDate slot — debit with duration+reason from request.",
-     "High", "Data integrity", "", "day-off-service", "Upsert pattern: onDuplicateKeyUpdate"),
-
-    ("TC-DO-022", "Credit entry — duration from existing ledger",
-     "Employee already has a ledger entry for the lastApprovedDate.",
-     "1. Approve request\n2. Check credit entry duration source",
-     "Credit entry duration = existing ledger entry's duration (not calendar). Lookup priority: existing ledger → calendar → reportingNorm fallback.",
-     "Medium", "Data integrity", "", "day-off-service", "Three-tier duration source resolution"),
-
-    ("TC-DO-023", "Credit entry — duration from calendar (no prior ledger)",
-     "No existing ledger entry for lastApprovedDate. Calendar has entry for that date.",
-     "1. Approve request\n2. Check credit entry duration",
-     "Credit entry duration = calendar day's duration for that date.",
-     "Medium", "Data integrity", "", "day-off-service", ""),
-
-    ("TC-DO-024", "Credit entry — duration from reportingNorm fallback",
-     "No existing ledger AND no calendar entry for lastApprovedDate.",
-     "1. Approve request\n2. Check credit entry duration",
-     "Credit entry duration = office reportingNorm (default 8 for full-day offices).",
-     "Low", "Boundary", "", "day-off-service", "Fallback tier — rare scenario"),
-
-    ("TC-DO-025", "Ledger duration=0 — full day-off (debit)",
-     "Request with duration=0 (standard full day-off).",
-     "1. Approve request\n2. SELECT duration FROM employee_dayoff WHERE personal_date = {personalDate}",
-     "Debit entry: duration=0. Represents taking full day off from work.",
-     "Medium", "Data integrity", "", "day-off-service", "Most common: 2454 of 5334 total entries"),
-
-    ("TC-DO-026", "Ledger duration=8 — full working day credit",
-     "Ledger entry for worked public holiday.",
-     "1. Query: SELECT * FROM employee_dayoff WHERE duration = 8 LIMIT 5\n2. Verify credit entries correlate with public holidays",
-     "duration=8 entries represent full working days on public holidays (credit). Most common: 2853 of 5334 entries.",
-     "Medium", "Data integrity", "", "day-off-service", "Credit entries outnumber debits (399 surplus)"),
-
-    ("TC-DO-027", "Ledger duration=7 — half-day / short day",
-     "Calendar day with duration=7 (pre-holiday shortened day).",
-     "1. Create request for half-day calendar entry\n2. Approve\n3. Check ledger duration",
-     "Ledger entry created with duration=7. Only 27 of 5334 entries are half-day — rare scenario.",
-     "Low", "Boundary", "", "day-off-service", "Half-day: 0.5% of all entries"),
-
-    ("TC-DO-028", "Reject does NOT revert ledger entries (BUG-DO-6)",
-     "APPROVED request with 2 ledger entries from prior approval.",
-     "1. PUT /v1/employee-dayOff/reject/{id}\n2. Verify status = REJECTED\n3. SELECT * FROM employee_dayoff WHERE employee = {empId}",
-     "BUG: Status changed to REJECTED but ledger entries remain intact. Credit/debit records orphaned — not cleaned up on rejection.",
-     "Critical", "Bug verification", "BUG-DO-6", "day-off-service", "Known bug: reject = status-only change"),
-
-    ("TC-DO-029", "Approve/reject/re-approve cycle — compounding phantom entries",
-     "Clean state request (no prior ledger).",
-     "1. Approve (creates 2 entries)\n2. Reject (entries remain)\n3. Approve again (creates 2 MORE entries via upsert)\n4. Count ledger entries",
-     "BUG: After approve→reject→approve, upsert may overwrite or compound entries. Each approve cycle writes without checking prior state. Risk of phantom balance drift.",
-     "Critical", "Bug verification", "BUG-DO-6", "day-off-service", "Repeated cycles compound data inconsistency"),
-
-    ("TC-DO-030", "Vacation day recalculation triggered by approval",
-     "Known vacation balance before approval.",
-     "1. Record vacation balance\n2. Approve day-off request\n3. RecalculateVacationDaysHandler fires\n4. Check new vacation balance",
-     "Two CalendarDaysChanged events: diff=+1 for lastApprovedDate (credit), diff=-1 for personalDate (debit). Net vacation balance change = 0 (cancel out).",
-     "High", "Integration", "", "day-off-service, vacation-service", "Net zero: confirmed in API testing"),
-
-    ("TC-DO-031", "Month norm update triggered by approval",
-     "Request with personalDate and lastApprovedDate in different months.",
-     "1. Approve request\n2. UpdateMonthNormHandler fires\n3. Check norms for both months",
-     "Working hours norm recalculated for both affected months. If same month, single recalculation.",
-     "Medium", "Integration", "", "day-off-service, statistics-service", "Cross-month approval triggers 2 norm updates"),
-
-    ("TC-DO-032", "Physical deletion of ledger on DELETED_FROM_CALENDAR (Path B)",
-     "APPROVED request with ledger entries. Admin about to delete calendar holiday.",
-     "1. Admin deletes calendar day entry\n2. CalendarDeletedApplicationEvent fires\n3. Check employee_dayoff and employee_dayoff_request tables",
-     "Ledger entries physically deleted (not soft-delete). Request status = DELETED_FROM_CALENDAR. Vacation days recalculated.",
-     "High", "Data integrity", "", "day-off-service, calendar-service", "Path B: physical delete unlike soft-delete elsewhere"),
-
-    ("TC-DO-033", "Physical deletion of ALL year's ledger on office change (Path D)",
-     "Employee has multiple day-off requests and ledger entries for 2026.",
-     "1. Employee changes office (CompanyStaff sync or admin action)\n2. AutoDeleteHelper.update fires\n3. Check all 2026 ledger entries",
-     "ALL ledger entries for the year physically deleted (max 100 requests processed). All requests set to DELETED_FROM_CALENDAR.",
-     "High", "Data integrity", "", "day-off-service, companystaff-integration", "Path D: year-wide wipe on office change"),
-
-    ("TC-DO-034", "Transaction isolation — non-atomic ledger + status (BUG-DO-15)",
-     "Request being approved.",
-     "1. Monitor: changeDayOffDaysAfterApprove (ledger) and changeDayOffStatus (status) calls\n2. Simulate failure between the two calls",
-     "BUG: Ledger write and status update are NOT atomic. Ledger can update without status change (or vice versa). No compensating transaction.",
-     "High", "Bug verification", "BUG-DO-15", "day-off-service", "Transaction isolation gap — separate non-transactional calls"),
-]))
-
-# ══════════════════════════════════════════════════════════════════════════════
-# TS-DO-CalConflict — Calendar Conflict Resolution (4 Paths)
-# ══════════════════════════════════════════════════════════════════════════════
-SUITES.append(("TS-DO-CalConflict", "Calendar Conflict Resolution", [
-    ("TC-DO-035", "Path A — Create holiday on date with approved day-off → MOVE",
-     "Employee has APPROVED day-off with personal_date = 2026-04-16. No holiday exists on that date.",
-     "1. Admin creates holiday 'Test Holiday' on 2026-04-16 in production calendar\n2. CalendarChangedApplicationEvent fires via RabbitMQ\n3. Check employee_dayoff table",
-     "New ledger entry created with personal_date = 2026-04-15 (previous working day). Old entry on 2026-04-16 unchanged (orphaned). Request status unchanged (APPROVED).",
-     "Critical", "Integration", "", "day-off-service, calendar-service", "Verified live in Session 15"),
-
-    ("TC-DO-036", "Path A — PreviousWorkingDayCalculator logic",
-     "Holiday created on Monday (day-off exists for employee).",
-     "1. Create holiday on Monday\n2. Check moved ledger entry date",
-     "Entry moved to Friday (previous working day). BUG: Calculator only checks Sat/Sun — does NOT query production calendar for additional holidays.",
-     "High", "Functional", "BUG (architecture)", "day-off-service", "PreviousWorkingDayCalculator: weekend-only check"),
-
-    ("TC-DO-037", "Path A — Orphaned old ledger entry (BUG-DO-8)",
-     "Pre-existing ledger entry on the newly-created holiday date.",
-     "1. Verify entry exists on target date\n2. Create holiday on that date\n3. Check both old and new entries",
-     "BUG: Old entry remains unchanged on the conflicting date. New moved entry created alongside. Two entries coexist — old is orphaned.",
-     "High", "Bug verification", "BUG-DO-8", "day-off-service", "Confirmed live: entry 5351 orphaned while 5491 created"),
-
-    ("TC-DO-038", "Path A — Email notification sent (DAY_MOVED)",
-     "Calendar change triggers day-off move.",
-     "1. Create holiday on existing day-off date\n2. Check email logs",
-     "NOTIFY_VACATION_CALENDAR_UPDATE_0H_DAY_MOVED email sent. Contains moved dates info. BUG: Hardcoded production URL in email body.",
-     "Medium", "Functional", "BUG-DO-10", "email-service", "Hardcoded https://ttt.noveogroup.com in all notifications"),
-
-    ("TC-DO-039", "Path A — Half-day (7h) calendar change notification",
-     "Calendar day changed to duration=7 (pre-holiday shortened day) where employee has day-off.",
-     "1. Admin changes calendar day to 7h\n2. Check notification template",
-     "NOTIFY_VACATION_CALENDAR_UPDATE_7H_DAY_MOVED template used (different from 0h). Day-off moved to previous working day.",
-     "Medium", "Functional", "", "day-off-service, email-service", "Different template for 7h vs 0h changes"),
-
-    ("TC-DO-040", "Path B — Delete calendar day → DELETED_FROM_CALENDAR",
-     "Calendar has holiday with associated employee day-off requests (NEW or APPROVED).",
-     "1. Admin deletes calendar day entry\n2. CalendarDeletedApplicationEvent fires\n3. Check requests and ledger",
-     "All requests with original_date = deleted date set to DELETED_FROM_CALENDAR (hardcoded SQL). Ledger entries physically deleted. Vacation days recalculated.",
-     "Critical", "Integration", "", "day-off-service, calendar-service", "Path B: hardcoded status in SQL, bulk operation"),
-
-    ("TC-DO-041", "Path B — Silent deletion (no email notification, BUG-DO-9)",
-     "Calendar day deleted affecting employee day-offs.",
-     "1. Delete calendar day\n2. Check email logs for notifications",
-     "BUG: No notification email sent on calendar deletion. Asymmetric: Path A (create) sends email, Path B (delete) is silent.",
-     "Medium", "Bug verification", "BUG-DO-9", "day-off-service", "Notification asymmetry confirmed live"),
-
-    ("TC-DO-042", "Path B — Bulk operation with multiple employees",
-     "Holiday date (e.g. June 12) with 19+ employee day-off requests.",
-     "1. Delete the holiday from calendar\n2. Check all affected requests",
-     "All matching requests bulk-updated to DELETED_FROM_CALENDAR. Historical: 82 records from 2025-06-12 'День России' removal. All ledger entries for that date deleted.",
-     "High", "Integration", "", "day-off-service", "Mass conflict: 82 records in one batch"),
-
-    ("TC-DO-043", "Path B — Entity state bug in updateAll()",
-     "Bulk status update via Path B.",
-     "1. Trigger calendar deletion\n2. Check Java entity state after SQL update",
-     "BUG: updateAll() hardcodes DELETED_FROM_CALENDAR in SQL but Java entities passed to post-update events retain original status (NEW/APPROVED). Events process stale data.",
-     "High", "Bug verification", "", "day-off-service", "Architecture: SQL bypasses JPA entity state"),
-
-    ("TC-DO-044", "Path C — Period change → NEW requests REJECTED",
-     "Office has NEW day-off requests with last_approved_date on specific date. Approve period about to change.",
-     "1. Admin changes approve period for the office\n2. PeriodChangedEventHandler fires (periodType == APPROVE)\n3. Check affected requests",
-     "NEW requests with matching last_approved_date set to REJECTED. NOTIFY_DAYOFF_AUTODELETE_TO_EMPLOYEE notification sent. APPROVED requests NOT affected.",
-     "High", "Integration", "", "day-off-service, accounting-backend", "Path C: only NEW status targeted"),
-
-    ("TC-DO-045", "Path D — Office change → year-wide DELETED_FROM_CALENDAR",
-     "Employee changes office. Has 10 day-off requests for current year (mixed NEW/APPROVED).",
-     "1. Employee office changes (via CompanyStaff sync)\n2. AutoDeleteHelper.update fires\n3. Check all current year requests and ledger",
-     "All NEW/APPROVED requests (max 100) set to DELETED_FROM_CALENDAR. ALL ledger entries for the year physically deleted. Notification sent per request.",
-     "High", "Integration", "", "day-off-service, companystaff-integration", "Path D: most destructive — year-wide wipe"),
-
-    ("TC-DO-046", "Cascading conflict — reassigned date becomes holiday too",
-     "Employee's day-off moved from Holiday A date to date X. Later, X becomes Holiday B.",
-     "1. Create Holiday A → day-off moved to X\n2. Create Holiday B on date X\n3. Check final state",
-     "System handles iteratively: day-off moved again to previous working day before X. Historical: employee 615 went through 3 iterations (Jun 12 → Jul 31 → Dec 31).",
-     "High", "Integration", "", "day-off-service", "Cascading: not atomic, handled sequentially"),
-
-    ("TC-DO-047", "Race condition — rapid create-then-delete calendar entries",
-     "Day-off exists. Calendar day about to be rapidly created then deleted.",
-     "1. Create calendar day (Path A fires → creates moved entry)\n2. Immediately delete calendar day (Path B fires → deletes entries)\n3. Check ledger consistency",
-     "Risk: Paths A and B use separate RabbitMQ queues. Rapid sequence could cause Path A's moved entry to not be cleaned by Path B if messages process out of order.",
-     "High", "Integration", "", "day-off-service, rabbitmq-messaging", "Race condition: separate MQ queues for create/delete"),
-
-    ("TC-DO-048", "Half-day boundary — duration=7 does NOT trigger conflict",
-     "Calendar day with duration=7 (half-day). Employee has day-off on that date.",
-     "1. Check CalendarUpdateProcessorImpl.processDay logic\n2. Create calendar entry with duration=7\n3. Verify no conflict resolution triggered",
-     "Half-day (7h) does NOT trigger conflict resolution for duration=0 day-offs. processDay only fires for full non-working (0h) changes. Multiple APPROVED requests exist on half-days in production data.",
-     "Medium", "Boundary", "", "day-off-service", "Boundary: 7h ≠ 0h in conflict logic"),
-
-    ("TC-DO-049", "Vacation recalculation after DELETED_FROM_CALENDAR (advanceVacation=false)",
-     "Russian office employee. Holiday removed from calendar, day-off deleted.",
-     "1. Delete calendar holiday\n2. RecalculateVacationDaysHandler fires\n3. Check vacation balance and type",
-     "If insufficient accrued days for year → vacation converted to ADMINISTRATIVE type. If sufficient → delayed 10-min check including same-payment-month requests. Email notification (ID_85) on conversion.",
-     "High", "Integration", "REQ-day-off §Calendar-Triggered", "day-off-service, vacation-service", "AV=false: conversion to administrative"),
-
-    ("TC-DO-050", "Vacation recalculation after DELETED_FROM_CALENDAR (advanceVacation=true)",
-     "Cyprus/Germany office employee. Holiday removed from calendar.",
-     "1. Delete calendar holiday\n2. Check vacation balance",
-     "Deducts from current year balance (can go negative). No automatic conversion to administrative type.",
-     "Medium", "Integration", "REQ-day-off §Calendar-Triggered", "day-off-service, vacation-service", "AV=true: negative balance allowed"),
-]))
-
-# ══════════════════════════════════════════════════════════════════════════════
-# TS-DO-Validation — Form and API Validation Rules
-# ══════════════════════════════════════════════════════════════════════════════
-SUITES.append(("TS-DO-Validation", "Day-Off Validation Rules", [
-    ("TC-DO-051", "Create with valid publicDate from production calendar",
-     "Production calendar has public holiday on target date. No existing request.",
-     "1. POST /v1/employee-dayOff with publicDate = valid holiday\n2. Check response",
-     "Request created successfully. EmployeeDayOffPublicDateExistsValidator passes: date exists in calendar AND no prior request.",
-     "High", "Functional", "", "day-off-service", "3-step validator: no-existing + calendar-check"),
-
-    ("TC-DO-052", "Create with non-existent publicDate — PUBLIC_DATE_NOT_FOUND_IN_CALENDAR",
-     "No calendar entry or existing day-off for target date.",
-     "1. POST /v1/employee-dayOff with publicDate = 2026-07-15 (random non-holiday)\n2. Check error response",
-     "Validation error: PUBLIC_DATE_NOT_FOUND_IN_CALENDAR. Request not created.",
-     "High", "Negative", "", "day-off-service", "Validator step 3: neither calendar nor existing day-offs"),
-
-    ("TC-DO-053", "Create with already-requested publicDate — EMPLOYEE_DAY_OFF_PUBLIC_DATE_EXISTS",
-     "Existing day-off request for the target publicDate.",
-     "1. POST /v1/employee-dayOff with publicDate that has existing request\n2. Check error response",
-     "BUG-DO-3: Instead of clean rejection, upsert creates new record shadowing original. Validator returns EMPLOYEE_DAY_OFF_PUBLIC_DATE_EXISTS but upsert bypasses it.",
-     "High", "Bug verification", "BUG-DO-3", "day-off-service", "Upsert shadow: new ID replaces old"),
-
-    ("TC-DO-054", "Duplicate personalDate — uniqueness validation",
-     "Existing day-off request with personalDate = 2026-06-15.",
-     "1. POST new request with personalDate = 2026-06-15\n2. Check response",
-     "EmployeeDayOffPersonalDateExistsValidator rejects: personalDate already used by another day-off.",
-     "High", "Negative", "", "day-off-service", "PersonalDate uniqueness enforced"),
-
-    ("TC-DO-055", "Past personalDate accepted via API (BUG-DO-4)",
-     "Current date is 2026-03-15.",
-     "1. PATCH /v1/employee-dayOff/{id} with personalDate = 2026-02-01\n2. Check response",
-     "BUG: Accepted without validation error. Past personal date stored. No backend validation for date currency.",
-     "High", "Bug verification", "BUG-DO-4", "day-off-service", "Confirmed: past date accepted on 2026-03-13"),
-
-    ("TC-DO-056", "Weekend personalDate accepted via API (BUG-DO-5)",
-     "Existing day-off request.",
-     "1. POST /v1/employee-dayOff with personalDate = 2026-06-13 (Saturday)\n2. Check response",
-     "BUG: Request created with weekend personalDate. No server-side working-day validation. Frontend blocks weekends but API does not.",
-     "High", "Bug verification", "BUG-DO-5", "day-off-service", "UI-only validation: API bypass possible"),
-
-    ("TC-DO-057", "UI blocks weekend selection in TransferDaysoffModal",
-     "TransferDaysoffModal open for day-off reschedule.",
-     "1. Navigate calendar to a weekend\n2. Attempt to click Saturday/Sunday dates",
-     "Weekend dates greyed out and unresponsive. renderDay disables Sat/Sun. Weekends only bypass-able via direct API call.",
-     "Medium", "Functional", "", "frontend-day-off-module", "Client-side only: no server validation"),
-
-    ("TC-DO-058", "Working weekend exception — selectable in UI datepicker",
-     "Production calendar marks a Saturday as working day (make-up weekend).",
-     "1. Open TransferDaysoffModal\n2. Navigate to the working Saturday\n3. Attempt to click it",
-     "Working weekend date is selectable (re-enabled despite being Saturday). renderDay checks calendar entries for working-weekend exceptions.",
-     "Medium", "Boundary", "", "frontend-day-off-module", "Exception: calendar working days override weekend rule"),
-
-    ("TC-DO-059", "maxDate boundary — originalDate + 1 year end",
-     "TransferDaysoffModal open for May Day 2026 holiday.",
-     "1. Navigate datepicker to December 2027\n2. Try to select December 31, 2027\n3. Try to select January 1, 2028",
-     "Dec 31, 2027 selectable (maxDate = end of year after originalDate's year). Jan 1, 2028 not selectable (beyond maxDate).",
-     "Medium", "Boundary", "", "frontend-day-off-module", "maxDate = moment(originalDate).add(1,'year').endOf('year')"),
-
-    ("TC-DO-060", "minDate for future holidays — equals originalDate",
-     "TransferDaysoffModal open for future holiday (e.g., 2026-12-31).",
-     "1. Try to select date before originalDate\n2. Check datepicker constraints",
-     "Dates before originalDate greyed/disabled. minDate = originalDate for future holidays.",
-     "Medium", "Boundary", "", "frontend-day-off-module", "isMinCurrentDay = false → minDate = originalDate"),
-
-    ("TC-DO-061", "minDate for past holidays — equals yesterday",
-     "TransferDaysoffModal open for past holiday (e.g., 2026-02-23, already passed).",
-     "1. Check datepicker minimum selectable date\n2. Verify dates before yesterday are disabled",
-     "minDate = yesterday. Allows selecting today and forward, but not older dates. Past holiday: isMinCurrentDay = true.",
-     "Medium", "Boundary", "", "frontend-day-off-module", "Past holidays: minDate shifts to yesterday"),
-
-    ("TC-DO-062", "Disabled dates — existing day-off personalDates blocked",
-     "Employee has day-off personalDate = 2026-05-11 already.",
-     "1. Open TransferDaysoffModal for different holiday\n2. Navigate to May 2026\n3. Check if May 11 is selectable",
-     "May 11 disabled (greyed). renderDay checks existing day-off personalDates to prevent double-booking.",
-     "Medium", "Functional", "", "frontend-day-off-module", "Prevents scheduling two day-offs on same date"),
-
-    ("TC-DO-063", "Short-day conflict dates disabled",
-     "Calendar has duration=7 entry on a date where employee already has personalDate.",
-     "1. Open TransferDaysoffModal\n2. Check the conflicting short-day date",
-     "Date disabled. renderDay checks for calendar days with duration=7 that conflict with existing personalDates.",
-     "Low", "Boundary", "", "frontend-day-off-module", "Short-day conflicts: rare but handled"),
-
-    ("TC-DO-064", "No duration/reason DTO validation (service-level only)",
-     "Creating day-off request.",
-     "1. POST /v1/employee-dayOff with duration = null, reason = null\n2. Check response",
-     "No DTO-level validation for duration or reason fields. Validated at service level. Missing values may use defaults or cause NPE.",
-     "Medium", "Negative", "", "day-off-service", "No @NotNull on duration/reason in CreateDTO"),
-
-    ("TC-DO-065", "Null personalDate passes through validator",
-     "Creating day-off request without personalDate.",
-     "1. POST /v1/employee-dayOff with personalDate = null\n2. Check response",
-     "EmployeeDayOffPersonalDateExistsValidator: null → valid (pass-through). Request may be created without personal date.",
-     "Medium", "Boundary", "", "day-off-service", "Null-safe validator: null = pass"),
-]))
-
-# ══════════════════════════════════════════════════════════════════════════════
-# TS-DO-Permissions — Access Control and Security
-# ══════════════════════════════════════════════════════════════════════════════
-SUITES.append(("TS-DO-Permissions", "Day-Off Permissions & Access Control", [
-    ("TC-DO-066", "CPO (PROJECT role) self-approval on creation",
-     "User has ROLE_PROJECT_MANAGER (CPO equivalent). User is their own manager in CompanyStaff.",
-     "1. Create day-off request as CPO user\n2. Check request status and approver",
-     "Request auto-approved (status APPROVED). Approver = self. Manager moved to optional approver with ASKED status.",
-     "High", "Security", "", "day-off-service", "Self-approval: no external validation gate"),
-
-    ("TC-DO-067", "Approver can APPROVE NEW request",
-     "Logged in as primary approver. Request with status NEW.",
-     "1. PUT /v1/employee-dayOff/approve/{id}\n2. Check response",
-     "Approved successfully. Status → APPROVED. Ledger entries created.",
-     "High", "Functional", "", "day-off-service", "Standard approval path"),
-
-    ("TC-DO-068", "Approver can APPROVE REJECTED request",
-     "Request with status REJECTED.",
-     "1. PUT /v1/employee-dayOff/approve/{id}\n2. Check response",
-     "Re-approval succeeds. Status → APPROVED. New ledger entries created (may compound if prior entries exist).",
-     "High", "Functional", "", "day-off-service", "Re-approval from REJECTED allowed"),
-
-    ("TC-DO-069", "Approver can REJECT NEW/APPROVED (personalDate >= period start)",
-     "APPROVED request, personalDate in current or future period.",
-     "1. PUT /v1/employee-dayOff/reject/{id}\n2. Check response",
-     "Rejection succeeds. Status → REJECTED. Ledger NOT reverted (BUG-DO-6).",
-     "High", "Functional", "BUG-DO-6", "day-off-service", "Rejection allowed when date in open period"),
-
-    ("TC-DO-070", "Approver cannot REJECT if personalDate < period start",
-     "APPROVED request with personalDate in closed period.",
-     "1. PUT /v1/employee-dayOff/reject/{id}\n2. Check response",
-     "Rejection blocked. personalDate is in a closed/past period. Permission denied.",
-     "High", "Negative", "", "day-off-service", "Guard: personalDate >= report period start"),
-
-    ("TC-DO-071", "Owner can DELETE (personalDate >= period start OR status != APPROVED)",
-     "Own NEW request with personalDate in current period.",
-     "1. DELETE /v1/employee-dayOff/{id}\n2. Check response",
-     "Deletion succeeds. Status → DELETED. Non-APPROVED status OR future personalDate allows delete.",
-     "High", "Functional", "", "day-off-service", "Owner delete guard: OR condition"),
-
-    ("TC-DO-072", "Owner cannot DELETE APPROVED with personalDate < period start",
-     "Own APPROVED request with personalDate in closed period.",
-     "1. DELETE /v1/employee-dayOff/{id}\n2. Check response",
-     "Deletion blocked. Both conditions fail: status IS APPROVED AND personalDate < period start.",
-     "High", "Negative", "", "day-off-service", "Both conditions must fail to block"),
-
-    ("TC-DO-073", "Owner can always EDIT (personalDate change)",
-     "Own request, any status.",
-     "1. PATCH /v1/employee-dayOff/{id} with new personalDate\n2. Check response",
-     "Edit succeeds. personalDate updated. Optional approvals reset to ASKED.",
-     "Medium", "Functional", "", "day-off-service", "Edit always allowed for owner"),
-
-    ("TC-DO-074", "Non-approver cannot approve/reject",
-     "Logged in as random employee (not approver for the request).",
-     "1. PUT /v1/employee-dayOff/approve/{id} on someone else's request\n2. Check response",
-     "Permission denied / 403. Only primary approver can approve/reject.",
-     "High", "Security", "", "day-off-service", "Authorization check on approve/reject"),
-
-    ("TC-DO-075", "Read-only / non-EMPLOYEE — no permissions",
-     "User with ROLE_VIEW_ALL (read-only) or non-ROLE_EMPLOYEE.",
-     "1. Attempt to create/approve/delete day-off requests\n2. Check response",
-     "All mutations blocked. Read-only users cannot create, approve, reject, or delete day-offs.",
-     "Medium", "Security", "", "day-off-service", "ROLE_EMPLOYEE required for mutations"),
-
-    ("TC-DO-076", "NPE on findAll without type parameter (BUG-DO-1)",
-     "Logged in as any user.",
-     "1. GET /v1/employee-dayOff (no type query parameter)\n2. Check response",
-     "BUG: NullPointerException at EmployeeDayOffSearchServiceImpl.java:134. ordinal() called on null EmployeeDayOffTypeFilter. Should return error or default.",
-     "High", "Bug verification", "BUG-DO-1", "day-off-service", "NPE: type is required but not validated"),
-
-    ("TC-DO-077", "NPE on list endpoint (BUG-DO-2)",
-     "Logged in as any user.",
-     "1. GET /v1/employee-dayOff/list\n2. Check response",
-     "BUG: NullPointerException in Caffeine cache — null key passed to computeIfAbsent at InternalEmployeeService.java:160.",
-     "High", "Bug verification", "BUG-DO-2", "day-off-service", "NPE in cache layer — null employee login"),
-
-    ("TC-DO-078", "Approver can always EDIT_APPROVER (change approver)",
-     "Current approver for a request.",
-     "1. PUT /v1/employee-dayOff/change-approver/{id}/{newLogin}\n2. Check response",
-     "Approver change succeeds regardless of request status. Always-available permission for current approver.",
-     "Medium", "Functional", "", "day-off-service", "EDIT_APPROVER: no status guard"),
-]))
-
-# ══════════════════════════════════════════════════════════════════════════════
-# TS-DO-Search — Search Types and Filtering
-# ══════════════════════════════════════════════════════════════════════════════
-SUITES.append(("TS-DO-Search", "Day-Off Search & Filtering", [
-    ("TC-DO-079", "MY search type — 3-source merge (own + calendar + ledger)",
-     "Logged in as employee with day-off requests and calendar entries.",
-     "1. GET /v1/employee-dayOff?type=MY\n2. Inspect response entries",
-     "Returns merged view: (1) own requests with status/dates, (2) calendar holidays without personalDate/status, (3) ledger entries. Date-matching heuristics merge related entries.",
-     "High", "Functional", "", "day-off-service", "Complex merge: 3 sources with heuristic matching"),
-
-    ("TC-DO-080", "MY search — calendar entries without status/personalDate",
-     "Employee has calendar holidays not yet requested.",
-     "1. GET /v1/employee-dayOff?type=MY&year=2026\n2. Filter entries without status",
-     "Calendar-sourced entries appear without status or personalDate. These represent available holidays not yet requested for transfer.",
-     "Medium", "Functional", "", "day-off-service", "UI filters out duration=8 working-weekend entries"),
-
-    ("TC-DO-081", "ALL search type — admin view",
-     "Logged in as admin.",
-     "1. GET /v1/employee-dayOff?type=ALL\n2. Check response scope",
-     "Returns all day-off requests across all employees. Used by admin interface.",
-     "Medium", "Functional", "", "day-off-service", "Admin-only search type"),
-
-    ("TC-DO-082", "APPROVER search — over-inclusion bug (BUG-DO-7)",
-     "Logged in as user who is primary approver for 13 employees.",
-     "1. GET /v1/employee-dayOff?type=APPROVER\n2. Count results vs actual primary approvals",
-     "BUG: Returns 484 results including requests where user is department manager or optional approver, not just primary approver. Only 13-18 should be from actual primary approver role.",
-     "High", "Bug verification", "BUG-DO-7", "day-off-service", "Over-includes: 484 vs 18 actual (26x)"),
-
-    ("TC-DO-083", "OPTIONAL_APPROVER search type",
-     "User is optional approver for some requests.",
-     "1. GET /v1/employee-dayOff?type=OPTIONAL_APPROVER\n2. Check results",
-     "Returns requests where user is in employee_dayoff_approval as optional approver. Non-blocking FYI-style approvals.",
-     "Medium", "Functional", "", "day-off-service", ""),
-
-    ("TC-DO-084", "MY_DEPARTMENT search type",
-     "Logged in as department manager.",
-     "1. GET /v1/employee-dayOff?type=MY_DEPARTMENT\n2. Check scope",
-     "Returns day-off requests for employees in user's department. Status filter available (NEW, APPROVED, REJECTED).",
-     "Medium", "Functional", "", "day-off-service", "Department-scoped view"),
-
-    ("TC-DO-085", "ON_PAID search type — credit entries only",
-     "Querying for paid holiday entries.",
-     "1. GET /v1/employee-dayOff?type=ON_PAID\n2. Check results",
-     "Returns credit-only entries (duration=8, worked holiday). No debit (day-off taken) entries.",
-     "Medium", "Functional", "", "day-off-service", "Credit-only view for ledger"),
-
-    ("TC-DO-086", "Year filter interaction with search types",
-     "Day-off requests exist across 2025 and 2026.",
-     "1. GET /v1/employee-dayOff?type=MY&year=2025\n2. GET /v1/employee-dayOff?type=MY&year=2026\n3. Compare results",
-     "Results filtered by year. 2025 shows historical (including DELETED_FROM_CALENDAR). 2026 shows current year. Year selector in UI controls this filter.",
-     "Medium", "Functional", "", "day-off-service", "Year filter: UI datepicker year selector"),
-
-    ("TC-DO-087", "Status filter — NEW, APPROVED, REJECTED",
-     "Manager view with MY_DEPARTMENT search type.",
-     "1. GET /v1/employee-dayOff?type=MY_DEPARTMENT&statuses=NEW\n2. GET with statuses=APPROVED\n3. GET with statuses=REJECTED",
-     "Results filtered by status. Status filter available on MY_DEPARTMENT tab. Values: Approved, NEW, Rejected.",
-     "Medium", "Functional", "", "frontend-day-off-module", "Status filter on My department tab only"),
-
-    ("TC-DO-088", "Pagination — 20 items per page",
-     "More than 20 results for a search type.",
-     "1. GET /v1/employee-dayOff?type=MY_DEPARTMENT&size=20&page=0\n2. GET page=1\n3. Check total count",
-     "20 items per page. Response includes total count and page metadata. 3 pages observed on My department tab.",
-     "Low", "Functional", "", "day-off-service", "Default page size = 20"),
-
-    ("TC-DO-089", "DELEGATED and DELEGATED_TO_ME search types",
-     "User has delegated/received day-off approvals.",
-     "1. GET /v1/employee-dayOff?type=DELEGATED\n2. GET type=DELEGATED_TO_ME\n3. Check results",
-     "DELEGATED: requests user redirected to another approver. DELEGATED_TO_ME: requests redirected to this user.",
-     "Low", "Functional", "", "day-off-service", "Redirect-related search types"),
-
-    ("TC-DO-090", "RELATED search type",
-     "User has related employees (project members, etc.).",
-     "1. GET /v1/employee-dayOff?type=RELATED\n2. Check scope",
-     "Returns day-off requests for employees related to user (project members, direct reports). Scope depends on user's role.",
-     "Low", "Functional", "", "day-off-service", "Related employees scope"),
-]))
-
-# ══════════════════════════════════════════════════════════════════════════════
-# TS-DO-ManagerUI — Manager View (5 Sub-tabs)
-# ══════════════════════════════════════════════════════════════════════════════
-SUITES.append(("TS-DO-ManagerUI", "Day-Off Manager View", [
-    ("TC-DO-091", "Manager view — 5 sub-tabs layout",
-     "Logged in as manager. Navigate to /vacation/request → Days off rescheduling tab.",
-     "1. Navigate to /vacation/request\n2. Click 'Days off rescheduling' tab\n3. Observe sub-tab layout",
-     "5 sub-tabs displayed: Approval | Agreement | My department | My projects | Redirected. Badge counts on Approval and Agreement tabs.",
-     "High", "Functional", "", "frontend-day-off-module", "RequestTypeWeekendTabsContainer"),
-
-    ("TC-DO-092", "Approval tab — approve action",
-     "NEW day-off request visible in Approval tab.",
-     "1. Click checkmark (approve) icon on NEW request row\n2. Confirm approval",
-     "Status changes to APPROVED. Row moves out of NEW filter. Badge count decrements. Ledger entries created on backend.",
-     "High", "Functional", "", "frontend-day-off-module", "Inline action button"),
-
-    ("TC-DO-093", "Approval tab — reject action",
-     "NEW day-off request visible in Approval tab.",
-     "1. Click X (reject) icon on NEW request row\n2. Confirm rejection",
-     "Status changes to REJECTED. Row updates. Employee notified.",
-     "High", "Functional", "", "frontend-day-off-module", ""),
-
-    ("TC-DO-094", "Approval tab — redirect to different approver",
-     "Request in Approval tab. User wants to delegate approval.",
-     "1. Click redirect icon on request row\n2. WeekendRedirectFormContainer opens\n3. Select new approver from dropdown\n4. Confirm",
-     "Old approver → optional. New approver assigned. Request reappears in new approver's Approval tab.",
-     "Medium", "Functional", "", "frontend-day-off-module", "PUT /change-approver/{id}/{login}"),
-
-    ("TC-DO-095", "Request details modal — full information display",
-     "Any request in manager view.",
-     "1. Click info/details icon on request row\n2. Observe WeekendDetailsModal content",
-     "Shows: Employee (CS link), Manager (CS link), Reason, Initial date (YYYY-MM-DD), Requested date, Status. Approve/Reject/Redirect buttons if approver.",
-     "Medium", "Functional", "", "frontend-day-off-module", "WeekendDetailsModal"),
-
-    ("TC-DO-096", "Details modal — optional approvers sub-table",
-     "Request has optional approvers with mixed statuses.",
-     "1. Open details modal\n2. Scroll to 'Agreed by' section",
-     "Sub-table shows optional approvers with individual statuses (Requested, Agreed, Rejected). 'Agreed by' column in main table is empty — only visible in modal.",
-     "Medium", "Functional", "", "frontend-day-off-module", "ApproveBar with vote counts"),
-
-    ("TC-DO-097", "Agreement tab — optional approve/reject",
-     "User is optional approver for a request. Request appears in Agreement tab.",
-     "1. Click Agreement tab\n2. Approve or reject the optional approval\n3. Check main request status",
-     "Optional approval status updated (ASKED → APPROVED/REJECTED). Main request status unchanged. Non-blocking.",
-     "Medium", "Functional", "", "frontend-day-off-module", "FYI-style: does not affect main status"),
-
-    ("TC-DO-098", "My department tab — status filter",
-     "Department manager with day-off requests in department.",
-     "1. Click My department tab\n2. Use Status filter dropdown\n3. Select 'NEW'\n4. Check filtered results",
-     "Table shows only NEW requests. Filter values: Approved, NEW, Rejected. Status filter unique to MY_DEPARTMENT tab.",
-     "Medium", "Functional", "", "frontend-day-off-module", "Status filter on My department only"),
-
-    ("TC-DO-099", "Badge counts on Approval and Agreement tabs",
-     "Manager has pending approvals and agreements.",
-     "1. Navigate to Days off rescheduling\n2. Observe badge numbers on Approval and Agreement tabs",
-     "Approval tab badge = approverWeekendCount (NEW requests to approve). Agreement tab badge = optionalApproverWeekendCount. Counts update on action.",
-     "Medium", "Functional", "", "frontend-day-off-module", "Redux: approverWeekendCount/optionalApproverWeekendCount"),
-
-    ("TC-DO-100", "Table columns — 7-column layout",
-     "Manager view with data.",
-     "1. Check table column headers in any sub-tab",
-     "Columns: Employee | Initial date (default sort desc) | Requested date | Manager | Approved by | Agreed by | Status | Actions. Agreed by column empty in table (data in modal only).",
-     "Low", "Functional", "", "frontend-day-off-module", "7 columns + Actions"),
-
-    ("TC-DO-101", "Overdue warning banner — broadcast to all users (BUG-DO-11)",
-     "Overdue NEW requests exist (personalDate or lastApprovedDate < today).",
-     "1. Log in as regular employee (no approver role)\n2. Check for banner on vacation/request page\n3. Click banner link",
-     "BUG: Warning 'You have overdue day off rescheduling requests' shown to ALL users including non-approvers. Link goes to APPROVER tab → shows 0 items or 403 for non-managers.",
-     "High", "Bug verification", "BUG-DO-11", "day-off-service, frontend-day-off-module", "Confirmed: regular employee sees irrelevant warning"),
-
-    ("TC-DO-102", "Warning banner — correct behavior for actual approvers",
-     "Overdue NEW requests exist. Logged in as actual approver for those requests.",
-     "1. Check for banner\n2. Click link to APPROVER tab\n3. Verify overdue requests visible",
-     "Banner correctly shows for approvers. APPROVER tab lists the overdue requests. Approver can take action (approve/reject).",
-     "Medium", "Functional", "", "frontend-day-off-module", "Expected behavior for actual approvers"),
-]))
-
-# ══════════════════════════════════════════════════════════════════════════════
-# TS-DO-EmployeeUI — Employee View (Days Off Tab)
-# ══════════════════════════════════════════════════════════════════════════════
-SUITES.append(("TS-DO-EmployeeUI", "Day-Off Employee View", [
-    ("TC-DO-103", "Employee view — Days off tab layout",
-     "Logged in as employee. Navigate to /vacation/my.",
-     "1. Click 'Days off' tab\n2. Observe layout",
-     "Title: 'My vacations and days off'. Year selector datepicker. 'Weekend regulation' info link → Confluence page. Table with 6 columns: Date of event | Duration | Reason | Approved by | Status | Actions.",
-     "High", "Functional", "", "frontend-day-off-module", "WeekendTab component"),
-
-    ("TC-DO-104", "Year selector — filter entries by year",
-     "Employee has day-off data across 2025 and 2026.",
-     "1. Select 2025 in year datepicker\n2. Select 2026\n3. Compare row counts",
-     "Table filters by selected year. 2026 Russia: 17 holidays. 2026 Cyprus: 6 holidays. Historical years show past data.",
-     "Medium", "Functional", "", "frontend-day-off-module", "Year-filtered table"),
-
-    ("TC-DO-105", "Edit button visibility logic",
-     "Employee view with mix of future and past holidays.",
-     "1. Check which rows show edit (pencil) icon\n2. Compare with row data",
-     "Edit button only on rows where: NOT a weekend AND duration=0 AND lastApprovedDate >= today. Past holidays and short-day (7h) rows have no edit. 5 of 17 rows had edit in session 4.",
-     "High", "Functional", "", "frontend-day-off-module", "Conditional: future + duration=0 + not weekend"),
-
-    ("TC-DO-106", "Cancel button (X) on NEW status rows",
-     "Employee has NEW (pending) day-off request.",
-     "1. Observe row with status NEW\n2. Check for red X cancel button\n3. Click X to cancel",
-     "Red X button visible on NEW status rows. Click triggers DELETE /v1/employee-dayOff/{id}. Status → DELETED. Row removed from view.",
-     "High", "Functional", "", "frontend-day-off-module", "Cancel postponement flow"),
-
-    ("TC-DO-107", "TransferDaysoffModal — calendar picker with constraints",
-     "Click edit on future holiday row.",
-     "1. TransferDaysoffModal opens with title 'Reschedule an event'\n2. Read-only 'Day off date' shows original date\n3. Calendar month-view datepicker displayed\n4. Navigate months with arrows",
-     "Modal shows read-only original date + interactive calendar. Weekends disabled (grey). Existing day-off dates disabled. Short-day conflicts disabled. Working weekends enabled (exception).",
-     "High", "Functional", "", "frontend-day-off-module", "TransferDaysoffModal with renderDay logic"),
-
-    ("TC-DO-108", "TransferDaysoffModal — OK button disabled until valid date selected",
-     "TransferDaysoffModal open.",
-     "1. Observe OK button state before selection\n2. Click valid date\n3. Observe OK button state after selection",
-     "OK button starts disabled. Enables immediately after valid date click. Cancel always enabled.",
-     "Medium", "Functional", "", "frontend-day-off-module", "Submit-gate: disabled until value selected"),
-
-    ("TC-DO-109", "Date format — DD.MM.YYYY (weekday) display",
-     "Employee view with day-off entries.",
-     "1. Check 'Date of event' column format",
-     "Format: 'DD.MM.YYYY (abbreviated weekday)', e.g. '01.05.2026 (fr)'. NEW status shows arrow format: '01.05.2026 → 11.05.2026'.",
-     "Low", "Functional", "", "frontend-day-off-module", "useWeekendTableHeaders date display logic"),
-
-    ("TC-DO-110", "NEW status shows originalDate → personalDate arrow",
-     "NEW request with both originalDate and personalDate.",
-     "1. Check Date of event column for NEW row",
-     "Arrow format: 'lastApprovedDate → personalDate'. Other statuses show only lastApprovedDate.",
-     "Medium", "Functional", "", "frontend-day-off-module", "Status-dependent display logic"),
-
-    ("TC-DO-111", "Filtering hides working-weekend entries (duration=8)",
-     "Calendar has working-weekend entries (Sat marked as working day).",
-     "1. Check employee Days off tab\n2. Look for duration=8 entries without compensatory day-off",
-     "WeekendTab filtering hides rows where checking date is normal working day with duration=8. Only day-offs and holidays visible, not standalone working weekends.",
-     "Medium", "Functional", "", "frontend-day-off-module", "May confuse users expecting full calendar view"),
-
-    ("TC-DO-112", "Navigation bug — Days off tab may redirect to /sick-leave/my",
-     "On /vacation/my page.",
-     "1. Click 'Days off' tab button\n2. Observe navigation target",
-     "BUG: Sometimes navigates to /sick-leave/my instead of /vacation/my/daysoff. Direct URL navigation works correctly. Intermittent behavior.",
-     "Medium", "Bug verification", "", "frontend-day-off-module", "Session 4 finding: intermittent redirect"),
-
-    ("TC-DO-113", "Localization — reasons display in Russian in EN mode (BUG-DO-12)",
-     "UI set to English language.",
-     "1. Switch to EN locale via nav bar language dropdown\n2. Navigate to Days off tab\n3. Check Reason column text",
-     "BUG: Reasons display in Russian even in EN mode (e.g., 'Новый год' instead of 'New Year'). Holiday names from production calendar not localized.",
-     "Medium", "Bug verification", "BUG-DO-12", "frontend-day-off-module, calendar-service", "Localization gap: reason field from DB, not i18n"),
-
-    ("TC-DO-114", "Duration column display semantics",
-     "Employee view with various duration values.",
-     "1. Check Duration column for different rows",
-     "Duration = '0' for full day-off, '7' for pre-holiday shortened day, '8' for full working day. UI shows raw hours — no human-friendly label.",
-     "Low", "Functional", "", "frontend-day-off-module", "Raw duration: 0/7/8 hours displayed"),
-
-    ("TC-DO-115", "Hardcoded date '2024-03-10' in WeekendTableActions (BUG-DO-13)",
-     "Employee view code.",
-     "1. Review WeekendTableActions component\n2. Check isOnlyOneAction logic",
-     "BUG: Hardcoded date '2024-03-10' in WeekendTableActions isOnlyOneAction — test/stub value never replaced. May affect action button visibility logic.",
-     "Low", "Bug verification", "BUG-DO-13", "frontend-day-off-module", "Dead test value in production code"),
-]))
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# Risk Assessment Data
-# ══════════════════════════════════════════════════════════════════════════════
-RISKS = [
-    ("Ledger not reverted on reject (BUG-DO-6)", "Orphaned ledger entries accumulate on approve/reject cycles, causing phantom vacation balance drift", "High", "Critical", "Critical",
-     "Test approve→reject→approve sequences. Verify ledger entry count after each operation. Monitor vacation balance for drift."),
-    ("Calendar conflict orphaned entries (BUG-DO-8)", "Path A creates moved ledger entry but does not clean up old entry — duplicate ledger records", "High", "High", "Critical",
-     "Test calendar create→check ledger for orphans. Verify old+new entries don't cause double day-off credit/debit."),
-    ("NPE on API endpoints (BUG-DO-1, BUG-DO-2)", "findAll and list endpoints crash with NullPointerException on missing parameters", "High", "High", "High",
-     "Test all GET endpoints without optional parameters. Verify graceful error handling or default values."),
-    ("Past/weekend date validation gaps (BUG-DO-4, DO-5)", "API accepts past dates and weekend personalDate — no server-side validation", "High", "Medium", "High",
-     "Test API with boundary dates: past, weekend, holidays. Compare UI vs API validation coverage."),
-    ("Upsert shadow behavior (BUG-DO-3)", "Duplicate publicDate creates shadow record via upsert, confusing IDs and potentially losing data", "Medium", "High", "High",
-     "Test duplicate creation attempts. Verify old record not lost. Check ID consistency."),
-    ("Transaction isolation gap (BUG-DO-15)", "Ledger write and status update are non-atomic — partial failure possible", "Medium", "Critical", "High",
-     "Test concurrent operations. Verify ledger and status consistency after failures."),
-    ("Calendar delete silent (BUG-DO-9)", "Path B does not send notification email — asymmetric with Path A", "Medium", "Medium", "Medium",
-     "Compare notification behavior across all 4 calendar conflict paths."),
-    ("Overdue warning broadcast (BUG-DO-11)", "All users see overdue day-off warning, not just approvers", "High", "Medium", "Medium",
-     "Test warning visibility across roles: employee, PM, DM, admin. Verify link leads to actionable page."),
-    ("APPROVER search over-inclusion (BUG-DO-7)", "Returns 26x more results than actual primary approvals", "Medium", "Medium", "Medium",
-     "Test APPROVER search type. Count results vs actual primary approver assignments."),
-    ("Hardcoded production URL (BUG-DO-10)", "All notification emails contain https://ttt.noveogroup.com regardless of environment", "High", "Low", "Medium",
-     "Check notification emails on test environments for correct URL."),
-    ("Navigation bug — Days off tab misdirect", "Clicking Days off tab sometimes navigates to /sick-leave/my", "Medium", "Medium", "Medium",
-     "Test tab navigation 10+ times. Check for intermittent redirects."),
-    ("Localization (BUG-DO-12)", "Day-off reasons display in Russian even in English UI mode", "High", "Low", "Low",
-     "Switch to EN locale. Verify reason column text language."),
-    ("Hardcoded date in UI (BUG-DO-13)", "WeekendTableActions has hardcoded '2024-03-10' test value", "Low", "Low", "Low",
-     "Review code impact. Test action button visibility around that date."),
-]
-
-# ══════════════════════════════════════════════════════════════════════════════
-# Feature Matrix Data
-# ══════════════════════════════════════════════════════════════════════════════
-# (feature, functional, negative, boundary, data_integrity, bug_verification, security, integration)
-FEATURE_MATRIX = [
-    ("Request Lifecycle (CRUD)", 12, 2, 1, 0, 1, 0, 4),
-    ("Ledger Mechanics", 2, 0, 3, 6, 3, 0, 0),
-    ("Calendar Conflicts (4 Paths)", 2, 0, 1, 1, 3, 0, 9),
-    ("Validation Rules", 3, 3, 5, 0, 3, 0, 1),
-    ("Permissions & Access", 5, 2, 0, 0, 2, 3, 1),
-    ("Search & Filtering", 10, 0, 0, 0, 1, 0, 1),
-    ("Manager View (5 Tabs)", 9, 0, 0, 0, 1, 0, 2),
-    ("Employee View", 8, 0, 0, 0, 3, 0, 2),
-]
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# WORKBOOK GENERATION
-# ══════════════════════════════════════════════════════════════════════════════
-def build_workbook():
-    wb = openpyxl.Workbook()
-
-    # ── Plan Overview ────────────────────────────────────────────────────────
-    ws = wb.active
-    ws.title = "Plan Overview"
-    ws.sheet_properties.tabColor = TAB_GREEN
-
-    plan_rows = [
-        ("Test Plan: Day-Off (Weekend Transfer) Module", ""),
-        ("", ""),
-        ("Document", "day-off.xlsx"),
-        ("Module", "Day-Off / Weekend Transfer (Compensatory Day-Off Lifecycle)"),
-        ("Version", "1.0"),
-        ("Date", date.today().isoformat()),
-        ("Branch", "release/2.1"),
-        ("Environment", "timemachine (primary dev), qa-1 (secondary dev), stage (prod baseline)"),
-        ("", ""),
-        ("SCOPE & OBJECTIVES", ""),
-        ("", ""),
-        ("Scope", "Full lifecycle of compensatory day-off requests: create, approve, reject, delete, edit (reschedule). "
-                  "Two-table architecture (employee_dayoff_request + employee_dayoff ledger). "
-                  "4 calendar conflict resolution paths (calendar create/delete, period change, office change). "
-                  "Credit/debit ledger mechanics, vacation day recalculation, month norm updates. "
-                  "8 search types including 3-source MY merge. "
-                  "Employee view (Days off tab), Manager view (5 sub-tabs), TransferDaysoffModal. "
-                  "15 known bugs across API, UI, data integrity, and localization layers."),
-        ("Out of scope", "Availability chart integration, notification email content/formatting (covered in email module), "
-                         "CompanyStaff sync internals, production calendar CRUD (covered in admin module)."),
-        ("", ""),
-        ("Objectives", "1. Verify complete request lifecycle (create → approve → use → ledger)\n"
-                       "2. Validate credit/debit ledger mechanics and vacation balance impact\n"
-                       "3. Test all 4 calendar conflict resolution paths (A: move, B: delete, C: system reject, D: office change)\n"
-                       "4. Verify permission model (approver, owner, CPO self-approve, read-only)\n"
-                       "5. Confirm 15 known bugs (7 from API testing, 8 from UI/code analysis)\n"
-                       "6. Test 8 search types with filtering and pagination\n"
-                       "7. Validate UI flows: employee view, manager 5-tab view, TransferDaysoffModal constraints"),
-        ("", ""),
-        ("APPROACH", ""),
-        ("", ""),
-        ("Test types", "Functional (51 cases), Negative (7), Boundary (10), Data integrity (7), "
-                       "Bug verification (17), Security (3), Integration (20)"),
-        ("Total cases", f"{sum(len(s[2]) for s in SUITES)} test cases across {len(SUITES)} test suites"),
-        ("", ""),
-        ("TEST DATA STRATEGY", ""),
-        ("", ""),
-        ("Test data", "Timemachine env: 3,241 day-off requests (2,902 APPROVED, 17 NEW, 14 REJECTED). "
-                      "5,334 ledger entries (2,853 credit, 2,454 debit, 27 half-day). "
-                      "Key test users: pvaynmaster (7 roles, CPO self-approve), perekrest (admin+accountant), "
-                      "asmirnov (regular employee, Cyprus office). "
-                      "SQL queries for test data:\n"
-                      "  SELECT * FROM employee_dayoff_request WHERE status = 'NEW' -- 17 pending requests\n"
-                      "  SELECT * FROM employee_dayoff WHERE duration = 0 LIMIT 10 -- day-off debits\n"
-                      "  SELECT e.login, COUNT(*) FROM employee_dayoff_request r JOIN employee e ON r.approver = e.id "
-                      "WHERE r.status = 'NEW' GROUP BY e.login -- overdue by approver\n"
-                      "  SELECT * FROM employee_dayoff_request WHERE status = 'DELETED_FROM_CALENDAR' -- 82 conflict records"),
-        ("", ""),
-        ("ENVIRONMENT REQUIREMENTS", ""),
-        ("", ""),
-        ("Environment", "Timemachine (primary): test clock at current date, all roles available, 3,241 requests.\n"
-                        "QA-1 (secondary): same build (2.1.26-SNAPSHOT), Cyprus office for cross-calendar testing.\n"
-                        "Stage (prod baseline): compare behavior with production-like data."),
-        ("", ""),
-        ("QASE GAP ANALYSIS", ""),
-        ("", ""),
-        ("Existing Qase", "19 test cases in 'Calendar day-off transfers' sub-suite (display-oriented, not lifecycle). "
-                          "0 lifecycle test cases. 0 ledger mechanics. 0 calendar conflict resolution. "
-                          "0 search type testing. 0 permission model testing."),
-        ("Gap", "Full lifecycle coverage needed: CRUD operations, ledger mechanics, all 4 conflict paths, "
-                "8 search types, permission model, 15 known bugs. This workbook fills 100% of lifecycle gaps."),
-        ("", ""),
-        ("TEST SUITES", ""),
+# ── Risk Assessment ────────────────────────────────────────────────
+
+def create_risk_assessment(wb):
+    ws = wb.create_sheet("Risk Assessment")
+    ws.sheet_properties.tabColor = TAB_COLOR_PLAN
+
+    ws.cell(row=1, column=1, value="<- Back to Plan").font = FONT_LINK
+    ws.cell(row=1, column=1).hyperlink = "#'Plan Overview'!A1"
+
+    headers = ["Feature", "Risk Description", "Likelihood", "Impact", "Severity",
+               "Mitigation / Test Focus"]
+    r = 3
+    for col, h in enumerate(headers, 1):
+        cell = ws.cell(row=r, column=col, value=h)
+        cell.font = FONT_HEADER
+        cell.fill = FILL_HEADER
+        cell.alignment = ALIGN_CENTER
+        cell.border = THIN_BORDER
+
+    risks = [
+        ("Approval Flow",
+         "Non-atomic transaction: approve writes ledger entries and status in separate calls. "
+         "Failure between steps creates orphaned ledger records that corrupt vacation balance.",
+         "Medium", "High", "Critical",
+         "Test interruption scenarios. Monitor ledger vs status consistency. "
+         "See TC-DO-036, TC-DO-107"),
+
+        ("Permissions",
+         "Unconditional EDIT_APPROVER: approver can change approver on DELETED and "
+         "DELETED_FROM_CALENDAR requests. Unnecessary DB mutations on terminal statuses.",
+         "High", "Medium", "High",
+         "Test approver change on all terminal statuses. Verify no cascade side effects. "
+         "See TC-DO-031, TC-DO-032, TC-DO-069"),
+
+        ("Permissions",
+         "Unconditional EDIT for owner: can PATCH personalDate on DELETED, REJECTED, "
+         "and DELETED_FROM_CALENDAR requests. Creates data inconsistency.",
+         "High", "Medium", "High",
+         "Test PATCH on every status. Verify ledger not affected by editing terminal states. "
+         "See TC-DO-012, TC-DO-013, TC-DO-070"),
+
+        ("Validation",
+         "Zero frontend validation: no Yup schema, no imperative validator. 100% server-dependent UX. "
+         "Empty form submission produces no client feedback.",
+         "High", "Medium", "High",
+         "Test all frontend validation gaps: empty form, past dates, weekend selection, "
+         "duplicate dates. See TC-DO-074 through TC-DO-077"),
+
+        ("Calendar Conflicts",
+         "Calendar removal cascade (deleteDayOffs) physically deletes ledger entries and changes "
+         "request status. If concurrent with approval, race condition can leave orphaned data.",
+         "Medium", "High", "High",
+         "Test concurrent calendar removal + approval. Verify ledger cleanup is complete. "
+         "See TC-DO-037, TC-DO-039, TC-DO-045"),
+
+        ("Security",
+         "Optional approver controller uses VACATIONS_VIEW for all write operations (POST/PATCH/DELETE). "
+         "Any user with view permission can modify optional approvers.",
+         "High", "Medium", "High",
+         "Test write operations with VIEW-only users. Verify service-level access checks compensate. "
+         "See TC-DO-056, TC-DO-057, TC-DO-058"),
+
+        ("Calendar Conflicts",
+         "PAGE_SIZE=100 hard limit in AutoDeleteHelper.update. Employees with >100 day-offs per year "
+         "get incomplete cleanup on office change. No pagination loop.",
+         "Low", "High", "Medium",
+         "Create >100 day-offs for one employee, trigger office change, verify incomplete cleanup. "
+         "See TC-DO-041"),
+
+        ("Security",
+         "Shared VACATIONS_* authorities: day-off controllers use vacation permission constants. "
+         "No separate DAYOFF_* permission set. Cross-module permission leak.",
+         "High", "Low", "Medium",
+         "Test vacation-only user accessing day-off endpoints. Verify unintended access. "
+         "See TC-DO-067"),
+
+        ("Validation",
+         "CANCELED status in enum but never assigned by any code path. Dead code in status model. "
+         "Untested and potentially unreachable.",
+         "Low", "Low", "Low",
+         "Verify no DB records with CANCELED status. Confirm no code path assigns it. "
+         "See TC-DO-082"),
+
+        ("Data Integrity",
+         "Null return from findApprovedByEmployeeAndDate instead of empty Optional/list. "
+         "Callers without null check will NPE.",
+         "Medium", "Medium", "Medium",
+         "Test queries returning no results. Verify null handling in callers. "
+         "See TC-DO-085"),
+
+        ("Data Integrity",
+         "Upsert on creation can silently overwrite existing ledger records if matching "
+         "employee+originalDate found. No conflict detection or error raised.",
+         "Low", "Medium", "Medium",
+         "Test creation with pre-existing ledger data for same date. Verify overwrite behavior. "
+         "See TC-DO-020"),
+
+        ("Integration",
+         "Hardcoded production URL in notification emails. All environments send emails "
+         "linking to production app. Testing env emails misdirect users.",
+         "High", "Low", "Low",
+         "Check notification email content on test envs. Verify URL matches env. "
+         "See TC-DO-086"),
     ]
 
-    for r, (k, v) in enumerate(plan_rows, 1):
-        ws.cell(row=r, column=1, value=k).font = SUBTITLE_FONT if k.isupper() else (TITLE_FONT if r == 1 else BODY_FONT)
-        ws.cell(row=r, column=2, value=v).font = BODY_FONT
-        ws.cell(row=r, column=2).alignment = WRAP
+    r += 1
+    for feat, risk, like, impact, sev, mitigation in risks:
+        fill_map = {
+            "Critical": FILL_RISK_HIGH, "High": FILL_RISK_HIGH,
+            "Medium": FILL_RISK_MED, "Low": FILL_RISK_LOW
+        }
+        fill = fill_map.get(sev, FILL_ROW_ODD)
+        write_row(ws, r, [feat, risk, like, impact, sev, mitigation], fill=fill)
+        r += 1
 
-    # Suite hyperlinks
-    link_start = len(plan_rows) + 1
-    for i, (tab, title, cases) in enumerate(SUITES):
-        r = link_start + i
-        cell = ws.cell(row=r, column=1)
-        cell.value = f"{tab} — {title}"
-        cell.hyperlink = f"#'{tab}'!A1"
-        cell.font = LINK_FONT
-        ws.cell(row=r, column=2, value=f"{len(cases)} cases").font = BODY_FONT
+    add_autofilter(ws, 3, len(headers))
+    col_widths = [18, 60, 12, 12, 12, 70]
+    for i, w in enumerate(col_widths, 1):
+        ws.column_dimensions[get_column_letter(i)].width = w
 
-    set_col_widths(ws, [40, 110])
 
-    # ── Feature Matrix ───────────────────────────────────────────────────────
-    ws_fm = wb.create_sheet("Feature Matrix")
-    ws_fm.sheet_properties.tabColor = TAB_GREEN
+# ── Main ───────────────────────────────────────────────────────────
 
-    fm_headers = ["Feature Area", "Functional", "Negative", "Boundary", "Data Integrity",
-                  "Bug Verification", "Security", "Integration", "Total"]
-    for c, h in enumerate(fm_headers, 1):
-        ws_fm.cell(row=1, column=c, value=h)
-    style_header_row(ws_fm, 1, len(fm_headers))
+def main():
+    wb = openpyxl.Workbook()
 
-    for idx, (feat, func, neg, bnd, di, bug, sec, intg) in enumerate(FEATURE_MATRIX):
-        r = idx + 2
-        total = func + neg + bnd + di + bug + sec + intg
-        vals = [feat, func, neg, bnd, di, bug, sec, intg, total]
-        for c, v in enumerate(vals, 1):
-            cell = ws_fm.cell(row=r, column=c, value=v)
-            if c == 1:
-                cell.hyperlink = f"#'{SUITES[idx][0]}'!A1"
-                cell.font = LINK_FONT
-        style_data_row(ws_fm, r, len(fm_headers), idx)
+    # Plan tabs (green)
+    create_plan_overview(wb)
+    create_feature_matrix(wb)
+    create_risk_assessment(wb)
 
-    # Totals row
-    total_r = len(FEATURE_MATRIX) + 2
-    ws_fm.cell(row=total_r, column=1, value="TOTAL").font = Font(name=ARIAL, bold=True, size=11)
-    for c in range(2, len(fm_headers) + 1):
-        total_val = sum(ws_fm.cell(row=r, column=c).value or 0 for r in range(2, total_r))
-        ws_fm.cell(row=total_r, column=c, value=total_val).font = Font(name=ARIAL, bold=True, size=11)
-    for c in range(1, len(fm_headers) + 1):
-        ws_fm.cell(row=total_r, column=c).border = THIN_BORDER
-        ws_fm.cell(row=total_r, column=c).fill = PatternFill("solid", fgColor="E2EFDA")
+    # TS tabs (blue)
+    all_suites = [
+        ("TS-DO-CRUD", "Create, Edit, Delete Flows", TS_DO_CRUD),
+        ("TS-DO-Approval", "Approve, Reject, Change Approver", TS_DO_APPROVAL),
+        ("TS-DO-Calendar", "Calendar Conflicts & Office Change", TS_DO_CALENDAR),
+        ("TS-DO-OptApprover", "Optional Approver Lifecycle", TS_DO_OPT_APPROVER),
+        ("TS-DO-Permissions", "Permissions & Access Control", TS_DO_PERMISSIONS),
+        ("TS-DO-Validation", "Validation, Errors & Edge Cases", TS_DO_VALIDATION),
+    ]
 
-    set_col_widths(ws_fm, [35, 12, 12, 12, 15, 16, 12, 14, 10])
-    ws_fm.auto_filter.ref = f"A1:{get_column_letter(len(fm_headers))}{total_r}"
+    total = 0
+    for tab_name, suite_name, cases in all_suites:
+        ws = wb.create_sheet(tab_name)
+        ws.sheet_properties.tabColor = TAB_COLOR_TS
+        count = write_ts_tab(ws, suite_name, cases)
+        total += count
+        print(f"  {tab_name}: {count} cases")
 
-    # ── Risk Assessment ──────────────────────────────────────────────────────
-    ws_ra = wb.create_sheet("Risk Assessment")
-    ws_ra.sheet_properties.tabColor = TAB_GREEN
-
-    ra_headers = ["Risk", "Description", "Likelihood", "Impact", "Severity", "Mitigation / Test Focus"]
-    for c, h in enumerate(ra_headers, 1):
-        ws_ra.cell(row=1, column=c, value=h)
-    style_header_row(ws_ra, 1, len(ra_headers))
-
-    severity_fills = {"Critical": RISK_CRIT, "High": RISK_HIGH, "Medium": RISK_MED, "Low": RISK_LOW}
-
-    for idx, (risk, desc, likelihood, impact, severity, mitigation) in enumerate(RISKS):
-        r = idx + 2
-        vals = [risk, desc, likelihood, impact, severity, mitigation]
-        for c, v in enumerate(vals, 1):
-            ws_ra.cell(row=r, column=c, value=v)
-        style_data_row(ws_ra, r, len(ra_headers), idx)
-        sev_fill = severity_fills.get(severity)
-        if sev_fill:
-            ws_ra.cell(row=r, column=5).fill = sev_fill
-
-    set_col_widths(ws_ra, [40, 60, 14, 14, 14, 60])
-    ws_ra.auto_filter.ref = f"A1:{get_column_letter(len(ra_headers))}{len(RISKS) + 1}"
-
-    # ── Test Suite Tabs ──────────────────────────────────────────────────────
-    tc_headers = ["Test ID", "Title", "Preconditions", "Steps", "Expected Result",
-                  "Priority", "Type", "Requirement Ref", "Module/Component", "Notes"]
-    tc_widths = [14, 40, 35, 50, 50, 10, 16, 22, 30, 30]
-
-    for tab_name, suite_title, cases in SUITES:
-        ws_ts = wb.create_sheet(tab_name)
-        ws_ts.sheet_properties.tabColor = TAB_BLUE
-
-        # Back-link
-        back = ws_ts.cell(row=1, column=1, value="\u2190 Back to Plan")
-        back.hyperlink = "#'Plan Overview'!A1"
-        back.font = BACK_LINK_FONT
-
-        ws_ts.cell(row=2, column=1, value=f"{tab_name}: {suite_title}").font = TITLE_FONT
-
-        header_row = 4
-        for c, h in enumerate(tc_headers, 1):
-            ws_ts.cell(row=header_row, column=c, value=h)
-        style_header_row(ws_ts, header_row, len(tc_headers))
-
-        for idx, case in enumerate(cases):
-            r = header_row + 1 + idx
-            for c, v in enumerate(case, 1):
-                ws_ts.cell(row=r, column=c, value=v)
-            style_data_row(ws_ts, r, len(tc_headers), idx)
-
-        set_col_widths(ws_ts, tc_widths)
-        last_data = header_row + len(cases)
-        ws_ts.auto_filter.ref = f"A{header_row}:{get_column_letter(len(tc_headers))}{last_data}"
-
-    wb.save(OUTPUT)
-    total_cases = sum(len(s[2]) for s in SUITES)
-    print(f"Generated {OUTPUT}")
-    print(f"  Tabs: Plan Overview + Feature Matrix + Risk Assessment + {len(SUITES)} TS-* suites")
-    print(f"  Total test cases: {total_cases}")
-    print(f"  Risks: {len(RISKS)}")
-    for tab, title, cases in SUITES:
-        priorities = {}
-        for c in cases:
-            p = c[5]
-            priorities[p] = priorities.get(p, 0) + 1
-        pstr = "/".join(f"{priorities.get(k, 0)}" for k in ["Critical", "High", "Medium", "Low"])
-        print(f"    {tab}: {len(cases)} cases (C/H/M/L: {pstr})")
+    outpath = "/home/v/Dev/ttt-expert-v1/expert-system/output/day-off/day-off.xlsx"
+    wb.save(outpath)
+    print(f"\nSaved: {outpath}")
+    print(f"Total: {total} test cases across {len(all_suites)} suites")
 
 
 if __name__ == "__main__":
-    build_workbook()
+    main()
