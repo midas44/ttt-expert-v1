@@ -1,12 +1,12 @@
 session:
-  delay_minutes: 70              # Working hours delay (3 sessions/window)
-  delay_minutes_offhours: 45     # Off-hours delay (4 sessions/window)
+  delay_minutes: 30              # Working hours delay (3 sessions/window), recommended: 70
+  delay_minutes_offhours: 30     # Off-hours delay (4 sessions/window), recommended: 45
   offhours_utc: "15:00-03:00"    # Non-working hours range (UTC)
-  max_duration_minutes: 240
+  max_duration_minutes: 120
 
 phase:
-  current: "knowledge_acquisition"
-  generation_allowed: false
+  current: "generation"
+  generation_allowed: true
 
 thresholds:
   knowledge_coverage_target: 0.8

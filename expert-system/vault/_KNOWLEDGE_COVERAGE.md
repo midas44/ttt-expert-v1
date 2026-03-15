@@ -9,9 +9,9 @@ status: active
 ---
 # Knowledge Coverage
 
-**Overall Coverage: 100%** (Session 49 — Phase B active)
+**Overall Coverage: 100%** (Session 50 — Phase B active)
 
-**Phase B Generation Progress: 2/8 modules complete (Statistics, Sick Leave)**
+**Phase B Generation Progress: 3/8 modules complete (Statistics, Sick Leave, Day-Off)**
 
 ## Coverage by Area
 
@@ -47,10 +47,11 @@ status: active
 - [x] Form validation rules — Yup 3 modes (create/edit/close), number required on close only
 - [x] **TEST PLAN + TEST CASES GENERATED** (120 cases, 8 suites, unified workbook)
 
-### Calendar/Day-Off (100%) — Phase B READY
+### Calendar/Day-Off (100%) — **PHASE B COMPLETE**
 - [x] Full lifecycle, 4 calendar conflict paths, live testing (7+15 bugs), business rules reference
 - [x] Employee-side UI exploration, TransferDaysoffModal date constraints, BUG-DO-11 live confirmation
 - [x] Form validation rules — imperative frontend + custom backend validators, UI vs API weekend gap
+- [x] **TEST PLAN + TEST CASES GENERATED** (115 cases, 8 suites, unified workbook)
 
 ### Accounting (100%) — Phase B READY
 - [x] Period management, payment flow, vacation day correction, production calendars
@@ -93,20 +94,20 @@ status: active
 - [x] Test data landscape, Qase granular mapping, test data generation strategies, generation priority order
 - [x] Form validation rules complete for ALL modules
 
-## Session 49 Statistics
+## Session 50 Statistics
 - Vault notes: 159
-- Analysis runs: 134
+- Analysis runs: 135
 - Design issues: 121
 - Exploration findings: 173
 - External refs: 65
 - Module health: 25 modules, avg debt score 5.18
-- Test case tracking: 231 (111 Statistics + 120 Sick Leave)
+- Test case tracking: 346 (111 Statistics + 120 Sick Leave + 115 Day-Off)
 
 ## Phase B Generation Priority Order
 1. **Statistics** — 111 cases generated, 0 Qase existing — **COMPLETE**
 2. **Sick Leave lifecycle** — 120 cases generated, 57 Qase display/notification — **COMPLETE**
-3. **Day-Off lifecycle** — 0 lifecycle cases (19 display exist) — NEXT
-4. **Security/Permissions** — 0 existing coverage
+3. **Day-Off lifecycle** — 115 cases generated, 19 Qase display — **COMPLETE**
+4. **Security/Permissions** — 0 existing coverage — NEXT
 5. **Accounting supplements** — 127 existing cases, fill gaps
 6. **Vacations supplements** — 200+ existing cases
 7. **Reports supplements** — existing coverage

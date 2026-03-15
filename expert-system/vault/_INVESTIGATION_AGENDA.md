@@ -15,7 +15,7 @@ status: active
 - P2: Medium — within next 5 sessions
 - P3: Low — backlog
 
-## Completed (Sessions 1-49)
+## Completed (Sessions 1-50)
 <details>
 <summary>Sessions 1-9 completed items (click to expand)</summary>
 
@@ -118,7 +118,7 @@ status: active
 </details>
 
 <details>
-<summary>Sessions 30-49 completed items (click to expand)</summary>
+<summary>Sessions 30-50 completed items (click to expand)</summary>
 
 ### Session 30
 - [x] Maintenance §9.4: Vault audit (154 notes, all indexed), SQLite cleanup (severity normalization, finding_type 37→13)
@@ -156,18 +156,19 @@ status: active
 - [x] Sick Leave module: sick-leave.xlsx (11 tabs: 3 plan + 8 test suites, 120 cases)
 - [x] 120 test cases tracked in SQLite (total: 231)
 
+### Session 50
+- [x] Day-Off module: day-off.xlsx (11 tabs: 3 plan + 8 test suites, 115 cases)
+- [x] 115 test cases tracked in SQLite (total: 346)
+
 </details>
 
 ## Active Items — Phase B Generation
 
-### P1: Day-Off Lifecycle (Next Session)
-- [ ] Read day-off business rules reference, backend/frontend notes, exploration findings
-- [ ] Generate day-off.xlsx (unified workbook: plan + TS-* tabs)
-- [ ] Coverage: request lifecycle, 4 calendar conflict paths, ledger mechanics, approval, search types, permissions
+### P1: Security/Permissions (Next Session)
+- [ ] Read role-permission access matrix, auth patterns, 5 known security gaps
+- [ ] Generate security.xlsx (unified workbook: plan + TS-* tabs)
+- [ ] Coverage: JWT+API token auth, CAS SSO, @PreAuthorize patterns, route-level permissions, API token 403 bugs
 - [ ] Track cases in SQLite, update vault
-
-### P2: Security/Permissions (Sessions 51-52)
-- [ ] Generate cross-cutting security test plan + cases (permission matrix, auth, API token gaps)
 
 ### P2: Accounting Supplements (Sessions 52-53)
 - [ ] Generate supplement test cases for gaps not in Qase (period edge cases, payment errors, notification triggers)
