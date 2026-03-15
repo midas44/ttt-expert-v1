@@ -43,6 +43,7 @@ session:
 phase:
   current: "knowledge_acquisition"   # "knowledge_acquisition" or "generation"
   generation_allowed: false          # Set automatically when auto_phase_transition is true
+  coverage_override: 0              # Force coverage to this value (0-100). Set -1 or remove to use computed value.
 
 thresholds:
   knowledge_coverage_target: 0.8
@@ -76,7 +77,9 @@ autonomy:
 
 **Rules:**
 - Read this file BEFORE any other action
-- If `phase.current` is `"knowledge_acquisition"`, focus on knowledge building. When coverage target is met and `auto_phase_transition` is `true`, update config.yaml to transition to Phase B automatically
+- **NEVER modify** these config.yaml fields — they are managed by the human operator: `session.*` (all delay/duration/offhours settings), `autonomy.max_sessions`, `autonomy.model`, `autonomy.effort`. Only modify `phase.*` fields for auto-transition.
+- If `phase.coverage_override` is set to 0-100, use that as current coverage and do NOT auto-transition. Investigate until notes reach genuine depth, then set `coverage_override: -1` before allowing transition.
+- If `phase.current` is `"knowledge_acquisition"`, focus on knowledge building. When coverage target is met, `auto_phase_transition` is `true`, and no coverage_override is active, update config.yaml to transition to Phase B automatically
 - If `phase.current` is `"generation"` and `phase.generation_allowed` is `true`, execute Phase B (test documentation generation with knowledge enrichment)
 - Check `session.delay_minutes` — if previous session briefing timestamp is less than this many minutes ago:
   - **hybrid mode**: notify human and wait for confirmation
@@ -432,10 +435,15 @@ Business workflows through code AND live app, requirements correlation, undocume
 
 ### Coverage Assessment and Phase Transition
 Update `_KNOWLEDGE_COVERAGE.md` comprehensively, query module_health for gaps.
+
+**Coverage override:** If `phase.coverage_override` is set to 0-100 in config.yaml, use that value as the current coverage instead of computing it. This allows the human to force a coverage reset (e.g., `coverage_override: 0` to restart deep investigation). When the override is present and >= 0, do NOT auto-transition regardless of computed coverage — investigate until the notes genuinely reach the depth described below, then remove the override (set to -1) before allowing transition.
+
 - **hybrid mode**: Present coverage report to human with Phase B readiness recommendation. Human updates config.yaml to enable generation.
-- **full mode** (with `auto_phase_transition: true`): When coverage >= `thresholds.knowledge_coverage_target`, automatically update `config.yaml` to set `phase.current: "generation"` and `phase.generation_allowed: true`. Log the transition decision to `_SESSION_BRIEFING.md`. The next session will begin Phase B.
+- **full mode** (with `auto_phase_transition: true`): When coverage >= `thresholds.knowledge_coverage_target` AND no coverage_override is active (value is -1 or field absent), automatically update `config.yaml` to set `phase.current: "generation"` and `phase.generation_allowed: true`. Log the transition decision to `_SESSION_BRIEFING.md`. The next session will begin Phase B.
 
 **Important:** Coverage assessment must be based on **depth, not breadth**. A module is not "covered" until its vault notes contain concrete testable details — validation rules with code snippets, error paths, permission requirements per endpoint, boundary values, and state transitions. A 200-word overview note does not count toward coverage.
+
+**Do NOT modify session timing parameters** (`delay_minutes`, `delay_minutes_offhours`, `max_duration_minutes`, `max_sessions`) in config.yaml — these are managed by the human operator.
 
 ---
 

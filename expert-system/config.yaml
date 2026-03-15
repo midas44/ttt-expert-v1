@@ -5,8 +5,9 @@ session:
   max_duration_minutes: 120
 
 phase:
-  current: "generation"
-  generation_allowed: true
+  current: "knowledge_acquisition"
+  generation_allowed: false
+  coverage_override: 0              # Force coverage to this value (0-100). Remove or set -1 to use computed value.
 
 thresholds:
   knowledge_coverage_target: 0.8
@@ -31,7 +32,7 @@ current_sprint: 15
 
 autonomy:
   mode: "full"                       # "hybrid" (human-attended) or "full" (unattended)
-  max_sessions: 100                  # Stop after N sessions (0 = unlimited)
+  max_sessions: 200                  # Stop after N sessions (0 = unlimited)
   consecutive_failure_limit: 3       # Abort after N consecutive failures
   auto_phase_transition: true        # Auto-switch to Phase B when coverage target met
   log_dir: "expert-system/logs"      # Session log directory
