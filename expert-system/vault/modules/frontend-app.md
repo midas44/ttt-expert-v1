@@ -57,4 +57,4 @@ React SPA with 12 feature modules, served via Spring Boot wrapper.
 ## Related
 - [[system-overview]]
 - [[frontend-architecture]]
-- [[frontend-state-management]]
+- [[frontend-architecture]]

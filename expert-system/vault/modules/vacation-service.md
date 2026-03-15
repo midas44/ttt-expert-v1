@@ -40,5 +40,5 @@ Manages all absence types: vacations, days-off, sick leaves.
 - [[system-overview]]
 - [[ttt-service]]
 - [[calendar-service]]
-- [[vacation-workflows]]
+- [[vacation-service-implementation]]
 - [[vacation-day-calculation]]

@@ -27,8 +27,8 @@ Microservices with API Gateway and Service Discovery (Spring Cloud).
 2. **[[vacation-service]]** — Absence management: vacations, days-off, sick leaves, approvals, vacation day calculations
 3. **[[calendar-service]]** — Production calendars, salary offices, working/non-working day management
 4. **[[email-service]]** — Email notification delivery, template rendering
-5. **[[gateway]]** — Spring Cloud Gateway for API routing
-6. **[[discovery]]** — Eureka service discovery
+5. **[[backend-architecture]]** — Spring Cloud Gateway for API routing
+6. **discovery** — Eureka service discovery
 7. **[[frontend-app]]** — React SPA served via Spring Boot wrapper
 
 ## Inter-Service Communication

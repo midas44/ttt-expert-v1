@@ -32,4 +32,4 @@ Manages production calendars, salary offices, and working/non-working day config
 ## Related
 - [[system-overview]]
 - [[vacation-service]]
-- [[accounting-workflows]]
+- [[accounting-backend]]

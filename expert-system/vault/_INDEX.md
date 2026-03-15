@@ -1,13 +1,3 @@
----
-type: meta
-tags:
-  - index
-  - navigation
-created: '2026-03-12'
-updated: '2026-03-13'
-status: active
----
-
 # Knowledge Base Index
 
 ## Meta
@@ -26,6 +16,8 @@ status: active
 - [[architecture/frontend-structural-quality]] — Circular deps, dead code (488), duplication (1.74%)
 - [[architecture/websocket-events]] — 12 event types, 7 STOMP topics, dual auth
 - [[architecture/rabbitmq-messaging]] — 8 exchanges, no DLQ, cross-service messaging
+- [[architecture/deployment-architecture]] — 7 services, Docker Compose, GitLab CI/CD, Spring Cloud Eureka+Gateway
+- [[architecture/auth-authorization-doc]] — Developer doc: dual JWT+API token auth, @PreAuthorize patterns, role loading
 
 ## Modules — Backend
 - [[modules/ttt-service]] — 54 controllers, 119 services, reports/tasks
@@ -37,11 +29,13 @@ status: active
 - [[modules/day-off-service-implementation]] — Two-table pattern, 9 lifecycle methods, calendar sync
 - [[modules/statistics-service-implementation]] — Cache table, 3 update paths, norm calculation
 - [[modules/planner-assignment-backend]] — Assignment generation, ordering (linked-list + position), close-by-tag
+- [[modules/planner-close-tag-permissions]] — Object-level permission system: CREATE/EDIT/DELETE, 4 authorized roles, 8 integration tests
 - [[modules/accounting-backend]] — Period management, vacation payment, day corrections, notifications
 - [[modules/calendar-service]] — 8 controllers, production calendars
 - [[modules/email-service]] — 4 controllers, notifications
 - [[modules/pm-tool-sync-implementation]] — Feign client, rate limiting, validation cascade bug
 - [[modules/companystaff-integration]] — CS sync across 3 services, V2 Feign client, 9 post-processors, 7 bugs
+- [[modules/auto-reject-report-flow]] — Auto-reject: trigger, UI on My Tasks, BO leak, no data on any env
 
 ## Modules — Frontend
 - [[modules/frontend-app]] — React SPA, 500+ source files
@@ -73,10 +67,31 @@ status: active
 - [[investigations/planner-ordering-deep-dive]] — Dual mechanism, 5 bug sources, 6 tickets, test gap
 - [[investigations/planner-dnd-bugs-analysis]] — #3332 race condition (3 paths), #3314 (4 root causes)
 - [[investigations/employee-reports-row-expansion]] — Chevron-only click, stale cache bug, spec deviation
+- [[investigations/sick-leave-number-validation]] — Backend vs frontend aligned: optional, max 40 chars, whitespace trim
+- [[investigations/tracker-integration-deep-dive]] — 8 tracker types, GraalVM sandbox, 222K work logs, low adoption
+- [[investigations/rabbitmq-statistic-report-sync]] — Complete PATH 3: vacation/sick-leave → MQ → statistic_report, race condition
+- [[investigations/database-performance-analysis]] — PostgreSQL performance: 2.6GB DB, 7 issues, 526MB unused indexes
 
-## Analysis
+## Analysis (Phase B Preparation)
 - [[analysis/absence-data-model]] — Vacation, sick leave, day-off data models
 - [[analysis/office-period-model]] — REPORT/APPROVE dual periods
+- [[analysis/phase-b-readiness-assessment]] — Phase B readiness: 99.5% → 100% coverage
+- [[analysis/role-permission-matrix]] — 85+ endpoints, 26 routes, 12 permission classes, 5 security gaps
+- [[analysis/vacation-business-rules-reference]] — 10 sections, 45+ rules, 12 known bugs
+- [[analysis/reports-business-rules-reference]] — 10 sections, 14 bugs, reports/confirmation/periods/statistics
+- [[analysis/sick-leave-dayoff-business-rules-reference]] — 2 parts, 23 bugs, 4 calendar conflict paths
+- [[analysis/qase-dedup-strategy]] — 258 suites, 1116 cases mapped, priority generation targets
+- [[analysis/qase-coverage-detailed-mapping]] — Corrected Qase coverage: Accounting 127 (not 0), sick leave/day-off lifecycle gaps
+- [[analysis/vacation-form-validation-rules]] — Frontend Formik + backend DTO/validator rules, min days gap
+- [[analysis/report-form-validation-rules]] — Frontend imperative + backend 8 DTOs, effort asymmetry, 62-day search limit
+- [[analysis/sick-leave-form-validation-rules]] — Frontend Yup 3 modes + backend DTO, number required on close only
+- [[analysis/dayoff-form-validation-rules]] — Frontend imperative + backend custom validators, UI vs API weekend gap
+- [[analysis/accounting-form-validation-rules]] — Period, payment (@Range 0-366), day correction, budget notification, statistics search
+- [[analysis/admin-calendar-form-validation-rules]] — Calendar CRUD (name uniqueness), events (duration 0-12), tracker config, admin validators
+
+## Branches
+- [[branches/cross-branch-release21-vs-stage]] — 193 commits, 8 major features, 17 bug fixes, 10 DB migrations
+- [[branches/pm-tool-stage-comparison]] — 34 files, +2209/-225: sync refactoring, rate limiting, UI removal
 
 ## Debt
 - [[debt/vacation-service-debt]] — 4 bugs, 2 security, schema debt, code quality
@@ -85,12 +100,23 @@ status: active
 ## Exploration — UI Flows
 - [[exploration/ui-flows/app-navigation]] — Navigation structure, 7 top-level items, login flow
 - [[exploration/ui-flows/vacation-pages]] — Vacation creation form, day-off tab, requests, chart
+- [[exploration/ui-flows/day-off-pages]] — Day-off UI pages and interactions
 - [[exploration/ui-flows/reporting-and-other-pages]] — My Tasks, Planner, Confirmation, Statistics
 - [[exploration/ui-flows/sick-leave-pages]] — 3 views: employee, manager (2 tabs), accounting (richer table)
 - [[exploration/ui-flows/accounting-pages]] — 5 sub-pages: salary, periods, payment, correction, sick leave records
 - [[exploration/ui-flows/admin-panel-pages]] — 7 admin pages: Projects, Employees, TTT Parameters, Calendars, API, Export, Account
+- [[exploration/ui-flows/admin-projects-deep-exploration]] — PM Tool links, task templates, edit tracker data, My Projects bug
+- [[exploration/ui-flows/admin-employees-deep-exploration]] — 2 tabs, ~400 active employees, ~40 subcontractors, search/sort/filter
 - [[exploration/ui-flows/sick-leave-accounting-workflow]] — Dual status system, any-to-any transitions, 3 views compared
 - [[exploration/ui-flows/confirmation-flow-live-testing]] — Full approve/reject UI testing, N+1 API, JS error
+- [[exploration/ui-flows/figma-tooltip-verification]] — 5 tooltip types verified against Figma specs
+- [[exploration/ui-flows/file-upload-sick-leave-flow]] — Full create→attach→view→delete cycle, 3 security findings
+- [[exploration/ui-flows/notification-page-budget-monitoring]] — Budget monitoring: create/delete, md/% limits, 5 roles
+- [[exploration/ui-flows/production-calendar-management]] — Admin calendar: 2 tabs, 10 calendars, 27 SOs, event CRUD
+- [[exploration/ui-flows/budget-norm-tooltip-verification]] — Conditional 3/4-number tooltip format verified, no bugs
+- [[exploration/ui-flows/statistics-ui-deep-exploration]] — Session 29: Tab visibility matrix (1-8 tabs by role), 4 search filters, 3 export options, 3 bugs
+- [[exploration/ui-flows/sick-leave-ui-verification]] — Session 29: My Sick Leaves (6 cols) vs Accounting (10 cols), inline status dropdown
+- [[exploration/ui-flows/sick-leave-crud-lifecycle]] — Session 31: Full CRUD lifecycle, validation rules, 3 bugs, status transitions
 
 ## Exploration — API Findings
 - [[exploration/api-findings/vacation-crud-api-testing]] — Full CRUD lifecycle, 6 bugs (3 HIGH NPEs)
@@ -99,10 +125,15 @@ status: active
 - [[exploration/api-findings/dayoff-api-testing]] — Full lifecycle (10 ops), 7 bugs (2 HIGH NPEs, 4 MEDIUM)
 - [[exploration/api-findings/accounting-api-testing]] — 25 endpoints tested, 3 bugs, 5 design issues
 - [[exploration/api-findings/statistics-api-testing]] — 10 endpoints, mixed unit discrepancy, cache pattern
+- [[exploration/api-findings/period-management-api-testing]] — Period management API findings
 - [[exploration/api-findings/dayoff-rescheduling-warning-bug]] — HIGH: overdue warning broadcast to all users
-- [[exploration/api-findings/period-management-api-testing]] — Period PATCH testing, 3 bugs, 5 constraints verified
-- [[exploration/api-findings/period-api-live-testing]] — Period advance/revert: 4 bugs (2 HIGH), full business rules, extended periods
+- [[exploration/api-findings/period-api-live-testing]] — Period advance/revert: 4 bugs (2 HIGH), full business rules
 - [[exploration/api-findings/dayoff-calendar-conflict-code-analysis]] — 4 conflict paths, architecture issues, entity state bug
+- [[exploration/api-findings/payment-flow-live-testing]] — 5 payment endpoints, 6 bugs, stuck NEW_FOR_PAID
+- [[exploration/api-findings/cron-job-live-verification]] — 20 ShedLock jobs verified, legacy entries, dead config
+- [[exploration/api-findings/reject-with-comment-e2e]] — Full reject/re-report cycle, reject table model, email gap
+- [[exploration/api-findings/vacation-day-correction-live-testing]] — AV validation, pastPeriodsAvailableDays drift bug
+- [[exploration/api-findings/statistics-cross-env-comparison]] — Session 31: TM vs Stage field differences (15 vs 17 fields), name format, export 404
 
 ## Exploration — Data Findings
 - [[exploration/data-findings/db-data-overview-tm]] — Data scale overview
@@ -112,8 +143,12 @@ status: active
 - [[exploration/data-findings/calendar-schema-deep-dive]] — 10 calendars, 9 office transitions
 - [[exploration/data-findings/sick-leave-dayoff-data-patterns]] — Sick leave + day-off DB data analysis
 - [[exploration/data-findings/ttt-backend-remaining-tables]] — 40 remaining tables, 8 data quality issues
-- [[exploration/data-findings/dayoff-rescheduling-data-patterns]] — Status distribution, DELETED_FROM_CALENDAR, overdue analysis
+- [[exploration/data-findings/dayoff-rescheduling-data-patterns]] — Status distribution, DELETED_FROM_CALENDAR
 - [[exploration/data-findings/dayoff-calendar-conflict-analysis]] — Mass conflict events, 7 edge cases, 10 test scenarios
+- [[exploration/data-findings/email-template-field-mapping]] — 120 templates: per-template Mustache variable mapping
+- [[exploration/data-findings/dayoff-calendar-conflict-live-test]] — Live create→delete: Path A orphaned, Path B silent deletion
+- [[exploration/data-findings/legacy-vs-new-email-templates]] — 50 legacy dead DB artifacts, 70 NOTIFY_* active
+- [[exploration/data-findings/test-data-landscape-timemachine]] — Phase B prep: employees, roles, offices, data volumes, test data strategies
 
 ## External — Requirements (Confluence)
 - [[external/requirements/confluence-overview]] — Entry page summary
@@ -130,10 +165,13 @@ status: active
 - [[external/requirements/REQ-sick-leave]] — Sick leave: 4-phase design, dual status, regional rules
 - [[external/requirements/REQ-day-off]] — Day-off: calendar recalculation, transfer rules
 - [[external/requirements/REQ-statistics-employee-reports]] — Employee Reports: norm formula, deviation, comments
+- [[external/requirements/confirmation-over-under-reporting]] — Over/under-reporting notification banner
+- [[external/requirements/planner-requirements]] — Planner full spec: assignments, ordering, Project Settings
+- [[external/requirements/vacation-day-correction-spec]] — AV=true/false rules, 5 negative balance scenarios
 
 ## External — Google Docs/Sheets
-- [[external/requirements/google-docs-inventory]] — 24 documents cataloged, 8 fetched
-- [[external/requirements/REQ-vacations-google-spec]] — Vacation v1.0: 14 events, accrual formula, all workflows
+- [[external/requirements/google-docs-inventory]] — 24 documents cataloged, 11 fetched
+- [[external/requirements/REQ-vacations-google-spec]] — Vacation v1.0: 14 events, accrual formula
 - [[external/requirements/REQ-tracker-integration]] — 5 trackers, zero-trust scripting sandbox
 - [[external/requirements/REQ-timesheet-rendering]] — Color-coding, sorting, permission buttons
 - [[external/requirements/REQ-dismissal-process]] — 8-step cross-system (TTT+CS+STT)
@@ -144,8 +182,18 @@ status: active
 ## External — Tickets
 - [[external/tickets/sprint-14-15-overview]] — Sprint 14 (42), Sprint 15 (59), Hotfix Sprint 14 (6)
 - [[external/tickets/pm-tool-integration]] — 14 tickets: sync, API issues, rate limiting, UI changes
+- [[external/tickets/sprint-15-update-session-24]] — 4 new tickets (#3399-3402), #2724 Ready to Test
+- [[external/tickets/ticket-3400-statistics-individual-norm-export]] — Statistics CSV export: individual norm, not yet in codebase
+- [[external/tickets/ticket-3392-innovationlab-banner]] — InnovationLab banner: frontend-only, hardcoded role bypass
+- [[external/tickets/sprint-16-preview]] — Sprint 16: 5 tickets (contractor termination, sick leave working days, vacation event feed bugs)
+
+## External — Testing Documents
+- [[external/requirements/EXT-test-plan]] — pytest stack, 11 sections, swagger-coverage, role parametrization
+- [[external/requirements/EXT-vacation-testing-notes]] — 14 critical regression cases, test users, CS integration
+- [[external/requirements/EXT-knowledge-transfer]] — QA handoff: automation gaps, technical quirks
+- [[external/existing-tests/qase-overview]] — 1,116 test cases in 258 suites
+- [[external/existing-tests/confluence-automation-plans]] — Two frameworks: Python/pytest (API) + Java/Selenide (grey-box)
 
 ## External — Other
-- [[external/existing-tests/qase-overview]] — 1,116 test cases in 258 suites
 - [[external/EXT-cron-jobs]] — 21 active cron jobs, code-verified
 - [[external/EXT-tracker-integration]] — Tracker integration spec

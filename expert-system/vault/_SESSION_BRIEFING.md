@@ -4,67 +4,55 @@ tags:
   - session
   - briefing
 created: '2026-03-12'
-updated: '2026-03-13'
+updated: '2026-03-15'
 status: active
 ---
 # Session Briefing
 
-## Session 13 — 2026-03-13 (Period API + Day-Off Conflicts + Employee Reports)
+## Current Session: 47
+**Timestamp**: 2026-03-15T04:30:00Z
+**Phase**: knowledge_acquisition
+**Mode**: full (unattended)
 
-**Phase**: Knowledge Acquisition | **Mode**: Full Autonomy
+## Session 47 Summary
 
-### Completed
+Monitoring-only session. 19th consecutive session with zero changes across all sources.
 
-1. **Period advance/revert live testing** — DONE
-   - Tested all GET/PATCH endpoints for report and approve periods on timemachine
-   - Mapped full business rules: report period (no jump limit, must be >= approve), approve period (1-month jump max, 2-month back limit, blocked by extended periods)
-   - Found 4 bugs: missing first-day-of-month validation on approve PATCH (HIGH), NPE on null body (HIGH), stack trace leakage (MEDIUM), permission inconsistency on report min/max (MEDIUM)
-   - Extended periods mechanism documented: time-limited employee period reopening, cron cleanup
-   - RabbitMQ events: PeriodChangedEvent (advance) vs PeriodReopenedEvent (revert)
-   - All mutations reverted after testing
-   - Vault note: [[period-api-live-testing]]
+### 1. Monitoring
 
-2. **Day-off calendar conflict code analysis** — DONE
-   - Mapped 4 distinct conflict paths (more complex than expected):
-     - Path A: CalendarChanged → silent ledger MOVE (no status change)
-     - Path B: CalendarDeleted → DELETED_FROM_CALENDAR status + physical ledger delete
-     - Path C: PeriodChanged → REJECTED by system (NEW requests only)
-     - Path D: Employee office change → DELETED_FROM_CALENDAR (year-wide)
-   - Found architecture issues: entity state bug in updateAll(), race condition between Path A/B, PreviousWorkingDayCalculator weekend-only assumption
-   - Confirmed all 82 DELETED_FROM_CALENDAR records trace to single Path B event (June 2025 holiday deletion)
-   - Hardcoded production URL in all notification templates
-   - Vault note: [[dayoff-calendar-conflict-code-analysis]]
+- **Commits**: No new commits on release/2.1 (**19th consecutive session**). Latest: 58b1eeb (2026-03-13, #2724-v4 merge)
+- **Stage branch**: No new commits. Latest: 2f13c2d (ea88c98 / #3392 InnovationLab)
+- **Sprint 15 tickets**: No updates since 2026-03-13 (**19th consecutive session**). 60 tickets total. Notable: #2724 at "Ready to Test", #3400 at "Production Ready" but no code in codebase.
+- **Sprint 16 tickets**: No updates since February. 5 tickets, all open, dormant.
 
-3. **Employee Reports row expansion** — DONE
-   - RESOLVED previous UNCLEAR finding: expansion is chevron-only (16x16 icon), NOT row click
-   - This deviates from Confluence requirement §4.1 ("Row click anywhere except name")
-   - cursor:pointer on full row is misleading UX
-   - Full component architecture mapped: EmployeeRow → useProjectBreakdown → saga → GET /v1/statistic/report/projects
-   - Found stale cache bug: projectBreakdown keyed by login only (no date range), projectDataLoaded never resets on month change
-   - Double sorting (API layer + hook) — redundant but harmless
-   - Playwright verification: captured screenshots of collapsed and expanded states
-   - Updated [[figma-vs-live-ui-comparison]] with resolved finding
-   - Vault note: [[employee-reports-row-expansion]]
+### 2. Environment Status
 
-### Key Findings
-- **BUG (HIGH)**: Approve period PATCH accepts any day of month (missing validation)
-- **BUG (HIGH)**: Period PATCH with null/empty body → 500 NPE
-- **BUG (MEDIUM)**: Stack trace leakage on invalid date format
-- **BUG (MEDIUM)**: GET report period min/max rejects API token while approve min/max accepts it
-- **BUG (MEDIUM)**: Employee Reports row expansion — chevron-only vs spec's row click
-- **BUG (MEDIUM)**: Stale project breakdown cache on date change
-- **ARCHITECTURE**: 4 distinct calendar-dayoff conflict paths with different behaviors
-- **ARCHITECTURE**: Entity state inconsistency in DELETED_FROM_CALENDAR bulk update
+| Env | Reachable | Notes |
+|-----|-----------|-------|
+| Timemachine | Yes | Fetch succeeded |
+| Stage | Yes | Fetch succeeded |
 
-### Session Statistics
-- Vault notes: 105 (102 prior + 3 new)
-- Analysis runs: 63 (+1)
-- Design issues: 101 (+8)
-- Exploration findings: 97 (+10)
-- External refs: 51 (unchanged)
+### Vault Updates
+- 0 new notes created
+- 0 existing notes modified (content)
+- 1 analysis_run logged (monitoring)
 
-### Next Session Priorities
-1. Payment flow live testing
-2. Figma tooltip interactions (sick leave display, norm tooltips)
-3. Remaining Google Docs (test plan, vacation testing notes, knowledge transfer)
-4. Google Sheet notification spec deeper analysis
+## Current State
+- Vault notes: 159
+- Analysis runs: 132
+- Design issues: 121
+- Exploration findings: 173
+- External refs: 65
+- Module health: 25 modules tracked
+- Test case tracking: 0 (Phase B not started)
+
+## Phase B Transition — STRONGLY RECOMMENDED (27th consecutive session)
+
+**Coverage: 100%** — target exceeded since session 22. All Phase B preparation complete.
+
+Project completely quiet for 19 consecutive sessions. No new knowledge to acquire. Further Phase A sessions provide monitoring value only.
+
+`auto_phase_transition: false` — awaiting human decision. To enable Phase B:
+1. Set `phase.current: "generation"` in config.yaml
+2. Set `phase.generation_allowed: true` in config.yaml
+3. Begin with Statistics module (0 existing Qase coverage)

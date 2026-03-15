@@ -70,4 +70,4 @@ Three types of absences with related but distinct data models.
 - [[vacation-service]]
 - [[database-schema]]
 - [[db-data-overview-tm]]
-- [[vacation-workflows]]
+- [[vacation-service-implementation]]

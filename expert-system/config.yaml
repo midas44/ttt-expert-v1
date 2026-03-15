@@ -5,8 +5,8 @@ session:
   max_duration_minutes: 240
 
 phase:
-  current: "knowledge_acquisition"
-  generation_allowed: false
+  current: "generation"
+  generation_allowed: true
 
 thresholds:
   knowledge_coverage_target: 0.8

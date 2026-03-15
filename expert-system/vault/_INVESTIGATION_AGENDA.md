@@ -4,7 +4,7 @@ tags:
   - agenda
   - planning
 created: '2026-03-12'
-updated: '2026-03-13'
+updated: '2026-03-15'
 status: active
 ---
 # Investigation Agenda
@@ -15,7 +15,7 @@ status: active
 - P2: Medium — within next 5 sessions
 - P3: Low — backlog
 
-## Completed (Sessions 1-9)
+## Completed (Sessions 1-47)
 <details>
 <summary>Sessions 1-9 completed items (click to expand)</summary>
 
@@ -52,53 +52,118 @@ status: active
 
 </details>
 
-## Completed (Session 10)
-- [x] Maintenance: SQLite cleanup, stale notes, cross-ref audit, category consolidation
-- [x] Feature toggles, WebSocket events, RabbitMQ messaging
-- [x] Accounting API testing, Admin panel, DB remaining tables
-- [x] Frontend accounting module, Email notification triggers, PM Tool sync code
+<details>
+<summary>Sessions 10-29 completed items (click to expand)</summary>
 
-## Completed (Session 11)
-- [x] Statistics API live testing: 10 endpoints, mixed unit discrepancy, cache pattern
-- [x] Planner DnD bugs: #3332 race condition, #3314 4 root causes
-- [x] Sick leave accounting workflow: 3 views, dual status, 5 UX issues
-- [x] CompanyStaff integration: 3-service sync, 9 post-processors, 7 bugs
-- [x] Google Docs/Sheets: 8 specs fetched
-- [x] Confluence Statistics requirements: Employee Reports spec
+### Session 10
+- [x] Maintenance, feature toggles, WebSocket, RabbitMQ, accounting API, admin panel, DB tables, frontend accounting, email triggers, PM Tool sync
 
-## Completed (Session 12)
-- [x] Confirmation flow live testing: Full approve/reject UI testing, N+1 API pattern, JS error
-- [x] Day-off rescheduling warning bug: Overdue warning broadcast to all users (HIGH bug)
-- [x] Day-off data patterns: DELETED_FROM_CALENDAR analysis, overdue request investigation
+### Session 11
+- [x] Statistics API (10 endpoints), planner DnD bugs, sick leave accounting, CompanyStaff integration, Google Docs, Confluence statistics
 
-## Completed (Session 13)
-- [x] **Period advance/revert live testing**: 4 bugs (2 HIGH), full business rules, extended periods, RabbitMQ events
-- [x] **Day-off calendar conflict code analysis**: 4 distinct paths mapped, architecture issues, entity state bug
-- [x] **Employee Reports row expansion**: RESOLVED UNCLEAR — chevron-only, stale cache bug, spec deviation
+### Session 12
+- [x] Confirmation flow live testing, day-off rescheduling warning bug, day-off data patterns
+
+### Session 13
+- [x] Period advance/revert (4 bugs), day-off calendar conflict code analysis, employee reports row expansion
+
+### Session 14
+- [x] Payment flow (6 bugs), Figma tooltip verification, Google Docs testing docs
+
+### Session 15
+- [x] Email template mapping, day-off conflict live triggering, auto-reject, cron jobs, file upload, maintenance
+
+### Session 16
+- [x] Confluence automation plans, Google Docs (inaccessible), notification page, production calendars
+
+### Session 17
+- [x] Reject with comment e2e, legacy vs new email templates, vacation day correction
+
+### Session 18
+- [x] Admin Projects deep exploration, remaining Confluence pages, Phase B readiness assessment
+
+### Session 19
+- [x] Cross-branch comparison (193 commits), Admin Employees deep exploration, sick leave number validation
+
+### Session 20
+- [x] Maintenance (vault audit, SQLite cleanup), tracker integration deep dive, RabbitMQ statistic sync
+
+### Session 21
+- [x] Database performance analysis (7 issues), deployment architecture, budget/norm tooltip verification
+
+### Session 22
+- [x] Role-permission access matrix (5 security gaps), vacation business rules reference
+
+### Session 23
+- [x] Reports/confirmation business rules reference, sick leave/day-off business rules reference
+
+### Session 24
+- [x] New code (#2724 permissions, auth doc), PM Tool stage comparison, Sprint 15 tickets, Qase dedup strategy
+
+### Session 25
+- [x] Maintenance: index consolidation, SQLite cleanup (3 refs + severity normalization), coverage assessment
+
+### Session 26
+- [x] Sprint 15 ticket scan (60 tickets, 8 new/updated investigated), #3400 CSV export gap, #3392 InnovationLab banner, PM Tool cluster
+
+### Session 27
+- [x] #2724 planner close-by-tag evolution (4 iterations), #3401 PM Tool ratelimit
+
+### Session 28
+- [x] Test data landscape (timemachine DB), Qase granular coverage (258 suites, corrected Accounting 0→127)
+
+### Session 29
+- [x] Statistics UI deep exploration (tab matrix, filters, exports, 3 bugs), sick leave UI verification
+
+</details>
+
+<details>
+<summary>Sessions 30-47 completed items (click to expand)</summary>
+
+### Session 30
+- [x] Maintenance §9.4: Vault audit (154 notes, all indexed), SQLite cleanup (severity normalization, finding_type 37→13)
+
+### Session 31
+- [x] Sick leave CRUD lifecycle via Playwright (7 fields, 4 validation rules, 3 bugs)
+- [x] Statistics cross-env comparison (TM vs Stage: 15 vs 17 fields, name format diff, export 404)
+
+### Session 32
+- [x] Day-off employee view via Playwright (QA-1), TransferDaysoffModal date constraints, BUG-DO-11 live confirmation
+
+### Session 33
+- [x] Form validation rules: vacation (Formik + 2 backend validators), reports (imperative + 8 DTOs), sick leave (Yup 3 modes), day-off (imperative + custom validators)
+
+### Session 34
+- [x] Fixed session 33 artifacts (4 files renamed .md), accounting form validation rules, admin/calendar form validation rules
+
+### Session 35
+- [x] Maintenance §9.4: 4 orphan files deleted, SQLite normalized (12 records), 15 wikilink path mismatches fixed
+- [x] Monitoring: No new commits (7th session), no Sprint 15 updates (7th session)
+
+### Sessions 36-47
+- [x] Monitoring only (8th-19th consecutive no-change sessions)
+- [x] Sprint 16 forward intelligence: 5 tickets (3 relevant)
+- [x] Session 40: Maintenance §9.4 — 43 broken wikilinks fixed, 3 monitoring records compressed
+- [x] Session 42: Corrected GitLab project ID from 622 to 1288
+- [x] Session 45: Maintenance §9.4 — compressed sessions 41-44 monitoring (4→1), vault audit (159 notes, 0 issues)
+
+</details>
 
 ## Active Items
 
-### P1 — Session 14
-- [ ] Payment flow live testing (vacation payment endpoints, accounting workflow)
-- [ ] Figma tooltip interactions manual verification (sick leave display, norm tooltips)
-- [ ] Remaining Google Docs: test plan, vacation testing notes, knowledge transfer docs
+### Phase B Transition (STRONGLY RECOMMENDED — Coverage 100%, 27th consecutive session)
+- [ ] Human decision: update config.yaml to `phase.current: "generation"` and `phase.generation_allowed: true`
+- [ ] Begin test plan generation starting with Statistics (0 Qase cases)
 
-### P2 — Sessions 15-16
-- [ ] Google Sheet: notifications spec deeper analysis (per-template field mapping)
-- [ ] Day-off calendar conflict live triggering (safe test with calendar mutation + restore)
-- [ ] Auto-reject behavior verification on confirmation page
+### Known Gaps (not blocking Phase B)
+- [ ] #3400 individual norm export — "Production Ready" ticket but no code in codebase
+- [ ] Planner spec (Google Doc — 401, need access) — assessed as low priority
 
-### P3 — Backlog
-- [ ] Cron job behavior verification on live environment
-- [ ] Tracker integration testing (JIRA, GitLab, ClickUp)
-- [ ] Cross-branch comparison (release/2.1 vs stage)
-- [ ] Performance analysis (3.5M task_reports, 2.5M task_assignments)
-- [ ] Remaining Confluence pages exploration
-- [ ] Notification page exploration
-- [ ] Legacy vs new email template coexistence investigation
-- [ ] RabbitMQ message flow for statistic report sync
-- [ ] Administration employee management features
-- [ ] Deployment architecture investigation
-- [ ] Production calendar management UI testing
-- [ ] File upload flow live testing (sick leave attachments)
-- [ ] Planner spec (Google Doc — 401, need access)
+### Sprint 16 Awareness (for Phase B context)
+- [ ] #2842 Contractor termination — new feature area, include contractor lifecycle in test cases
+- [ ] #2954 Sick leave working days column — UI addition, include in sick leave test cases
+- [ ] #2876 Vacation event feed + calendar change bugs — edge cases for vacation tests
+
+### Ongoing Monitoring (automated per session)
+- [ ] Check for new commits on release/2.1
+- [ ] Check for Sprint 15/16 GitLab ticket updates

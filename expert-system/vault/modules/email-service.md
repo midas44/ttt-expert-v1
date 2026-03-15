@@ -30,4 +30,4 @@ Handles email notification delivery and template rendering.
 
 ## Related
 - [[system-overview]]
-- [[notification-system]]
+- [[email-notification-triggers]]

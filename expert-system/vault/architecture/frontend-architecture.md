@@ -55,4 +55,4 @@ React 18 + Redux SPA with 11 feature modules, ~500+ source files, lazy-loaded ro
 ## Related
 - [[system-overview]]
 - [[frontend-app]]
-- [[frontend-state-management]]
+- [[frontend-architecture]]

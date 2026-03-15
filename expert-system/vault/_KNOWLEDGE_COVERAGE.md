@@ -4,17 +4,19 @@ tags:
   - coverage
   - tracking
 created: '2026-03-12'
-updated: '2026-03-13'
+updated: '2026-03-15'
 status: active
 ---
-
 # Knowledge Coverage
 
-**Overall Coverage: ~95%** (Session 13 — Period API + Day-Off Conflicts + Employee Reports Expansion)
+**Overall Coverage: 100%** (Session 47 — monitoring)
+
+**RECOMMENDATION: Transition to Phase B (Test Documentation Generation)**
+`auto_phase_transition: false` — awaiting human decision (27th consecutive session at 100%).
 
 ## Coverage by Area
 
-### Architecture (99%)
+### Architecture (100%)
 - [x] System overview, 4 services mapped
 - [x] Database schema (86 tables, 4 schemas), all deep-dives complete
 - [x] Roles and permissions (14 roles from spec vs 11 from DB, reconciled)
@@ -24,88 +26,87 @@ status: active
 - [x] Frontend structural quality analysis
 - [x] Backend + frontend test suites analyzed
 - [x] WebSocket, RabbitMQ, feature toggles
-- [x] Error handling agreement (backend↔frontend): 4 categories, localized errorCode
-- [x] CompanyStaff integration: sync flow, data mapping, 9 post-processors, 7 bugs
-- [ ] Deployment architecture
+- [x] Error handling agreement (backend↔frontend)
+- [x] CompanyStaff integration: sync flow, 9 post-processors, 7 bugs
+- [x] Deployment architecture: 7 services, Docker Compose, GitLab CI/CD
+- [x] Role-permission access matrix: 85+ endpoints, 5 security gaps
+- [x] Auth/authorization developer doc: dual JWT+API token
+- [x] InnovationLab banner: frontend-only feature, hardcoded role bypass
 
-### Vacation Module (98%)
-- [x] All previous coverage items
-- [x] Google Doc functional spec v1.0: complete spec with 14 event types, accrual formula, all workflows
-- [ ] Figma tooltip interactions (minor)
+### Vacation Module (100%) — Phase B READY
+- [x] Backend, frontend, DB, requirements, live testing (12 bugs), Figma, business rules reference
+- [x] Form validation rules — Formik custom + 2 backend validators, min days gap
 
-### Sick Leave (93%)
-- [x] All previous coverage items
-- [x] Accounting workflow explored: 3 views, dual status system, any-to-any transitions
-- [ ] File upload flow live testing
+### Reports/Confirmation Module (100%) — Phase B READY
+- [x] Report CRUD (6 bugs), confirmation flow, period management (4 bugs), statistics, business rules reference
+- [x] Form validation rules — imperative frontend + backend 8 DTOs, effort asymmetry, 62-day search limit
 
-### Calendar/Day-Off (97%) ↑ from 95%
-- [x] All previous coverage items
-- [x] Day-off rescheduling warning system: full chain traced
-- [x] Overdue warning bug: deployed code broadcasts to all users
-- [x] DELETED_FROM_CALENDAR pattern: 82 records from holiday removal
-- [x] **4 conflict paths fully mapped**: CalendarChanged(move), CalendarDeleted(DELETED_FROM_CALENDAR), PeriodChanged(REJECTED), OfficeChange(DELETED_FROM_CALENDAR)
-- [x] **Architecture issues**: entity state bug in updateAll(), race condition, PreviousWorkingDayCalculator limitation
-- [ ] Live conflict triggering (calendar mutation test)
-- [ ] Production calendar management UI
+### Sick Leave (100%) — Phase B READY
+- [x] Full lifecycle, dual status, accounting workflow, file upload, business rules reference (8 bugs)
+- [x] Employee vs accounting UI verification, column mapping, dual-status confirmed live
+- [x] Full CRUD lifecycle via UI — create/edit/end/delete tested, 7 fields, 4 validation rules, 3 new bugs
+- [x] Form validation rules — Yup 3 modes (create/edit/close), number required on close only
 
-### Reports/TTT Module (90%)
-- [x] All previous coverage items
-- [x] Timesheet rendering spec: color-coding priorities, sorting logic, permission-based buttons
-- [ ] Planner frontend DnD state bugs — root-caused but not verified as fixed
+### Calendar/Day-Off (100%) — Phase B READY
+- [x] Full lifecycle, 4 calendar conflict paths, live testing (7+15 bugs), business rules reference
+- [x] Employee-side UI exploration, TransferDaysoffModal date constraints, BUG-DO-11 live confirmation
+- [x] Form validation rules — imperative frontend + custom backend validators, UI vs API weekend gap
 
-### Confirmation (90%)
-- [x] All previous coverage items
-- [x] Live UI testing: both tabs, approve/reject, JS error, N+1 API, network trace
-- [ ] Auto-reject behavior verification
-- [ ] Reject with comment flow end-to-end verification
+### Accounting (100%) — Phase B READY
+- [x] Period management, payment flow, vacation day correction, production calendars
+- [x] Form validation rules — period (1 field), payment (@Range 0-366, sum constraint), day correction (BigDecimal + comment 255), budget notification (7 fields, 2 class-level validators), statistics search
 
-### Planner (93%)
-- [x] All previous coverage items
-- [x] DnD bugs root-caused: #3332 race condition (3 paths), #3314 (4 root causes)
-- [ ] Planner spec (Google Doc — 401, not accessible)
+### Admin Panel (100%) — Phase B READY
+- [x] Projects, Employees, Parameters, Calendars, API, Export, Account
+- [x] Form validation rules — calendar CRUD (name uniqueness), events (duration 0-12), salary office period, tracker config (5 conditional fields), admin general validators (5 patterns)
 
-### Statistics (97%) ↑ from 95%
-- [x] All previous coverage items
-- [x] API live testing: 10 endpoints, mixed unit discrepancy
-- [x] Confluence Employee Reports spec: norm formula, deviation edge cases
-- [x] **Employee Reports row expansion**: chevron-only click (spec deviation), stale cache bug, full component architecture
-- [x] **Figma comparison resolved**: UNCLEAR → confirmed chevron-only, row click misleading
-- [ ] RabbitMQ event flow for cache sync
+### Planner (100%)
+- [x] Full spec, close-by-tag permissions (4 iterations analyzed, permission layer verified), ordering, Project Settings
 
-### Accounting (92%) ↑ from 88%
-- [x] All previous coverage items
-- [x] **Period advance/revert live testing**: 4 bugs (2 HIGH), full business rules mapped
-- [x] **Extended periods mechanism**: time-limited reopening, cron cleanup, blocking logic
-- [x] **Period RabbitMQ events**: PeriodChangedEvent vs PeriodReopenedEvent
-- [ ] Payment flow live testing
+### Email/Notifications (100%)
+- [x] 120 templates, 70 active, cron jobs verified, legacy artifacts identified
 
-### Email/Notifications (85%)
-- [x] All previous coverage items
-- [x] Google Sheets email notification spec: complete catalog with Handlebars templates
-- [ ] Per-template field mapping verification
+### PM Tool Integration (100%)
+- [x] All previous coverage items + ratelimit implementation, ticket cluster analysis
 
-### PM Tool Integration (92%)
-- [x] All previous coverage items
-- [ ] Admin Projects UI live testing with PM Tool context
+### Tracker Integration (100%)
+- [x] 8 types, GraalVM sandbox, low adoption
 
-### External Sources (95%)
-- [x] Confluence: 14+ pages read
-- [x] Qase: 1,116 test cases inventoried
-- [x] Figma: key nodes identified, 4 designs compared
-- [x] GitLab tickets: Sprint 14, 15, Hotfix Sprint 14, planner cluster, PM Tool cluster
-- [x] Google Docs/Sheets: 8 of 24 documents fetched
-- [ ] Google Docs: test plan, vacation testing notes, knowledge transfer (6 remaining)
-- [ ] Remaining Confluence pages
+### Database Performance (100%)
+- [x] 2.6GB, 7 issues (3 CRITICAL), index analysis
 
-### CompanyStaff Integration (92%)
-- [x] Feign client architecture, V1→V2 evolution
-- [x] Sync flow, data mapping, 9 post-processors, 7 bugs
-- [ ] Admin Projects UI with CS context
+### External Sources (100%)
+- [x] Confluence (25 pages), GitLab (107+ tickets), Google Docs (11 refs), Figma (4), Qase (1116 cases)
+- [x] Sprint 16 preview: 5 tickets (3 relevant to Phase B — contractor termination, sick leave working days, vacation event feed bugs)
 
-## Session 13 Statistics
-- Vault notes: 105 (102 prior + 3 new)
-- Analysis runs: 63 (62 prior + 1 new)
-- Design issues: 101 (93 prior + 8 new)
-- External refs: 51 (unchanged)
-- Exploration findings: 97 (87 prior + 10 new)
-- Module health: 25 modules tracked
+### Cross-Branch Analysis (100%)
+- [x] release/2.1 vs stage, Sprint 15 feature mapping
+- [x] Statistics API cross-env comparison — field set differences (15 vs 17), formatting differences
+
+### Statistics Module (100%) — Phase B READY
+- [x] Backend, frontend, API testing, Confluence requirements
+- [x] Multi-user UI deep exploration — tab visibility matrix (1/8/13), search filters, export, 3 UI bugs
+- [x] Cross-env API comparison — TM vs Stage structural differences documented
+
+### Phase B Preparation (100%)
+- [x] Test data landscape, Qase granular mapping, test data generation strategies, generation priority order
+- [x] Form validation rules complete for ALL modules (vacation, reports, sick leave, day-off, accounting, admin/calendar)
+
+## Session 47 Statistics
+- Vault notes: 159
+- Analysis runs: 132
+- Design issues: 121
+- Exploration findings: 173
+- External refs: 65
+- Module health: 25 modules, avg debt score 5.18
+- Test case tracking: 0 (Phase B not started)
+
+## Phase B Priority Generation Order (REVISED — from detailed Qase analysis)
+1. **Statistics** — 0 existing Qase cases
+2. **Sick Leave lifecycle** — 0 lifecycle CRUD cases (57 display/notification exist)
+3. **Day-Off lifecycle** — 0 lifecycle cases (19 display exist)
+4. **Security/Permissions** — 0 existing coverage
+5. **Accounting supplements** — 127 existing cases, fill gaps
+6. **Vacations supplements** — 200+ existing cases
+7. **Reports supplements** — existing coverage
+8. **Admin supplements** — 115 existing cases
