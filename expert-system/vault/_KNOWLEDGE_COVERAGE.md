@@ -1,112 +1,75 @@
----
-type: meta
-tags:
-  - coverage
-  - tracking
-created: '2026-03-12'
-updated: '2026-03-15'
-status: active
----
 # Knowledge Coverage
 
-**Overall Coverage: 100%** (Session 48 — Phase B active)
+## Phase B Generation Status — 10 WORKBOOKS, 1090 CASES, 132 TABS
 
-**Phase B Generation Progress: 1/8 modules complete (Statistics)**
+Overall coverage: **95%** (unchanged — remaining 5% depends on unimplemented features)
 
-## Coverage by Area
+### Module Deep-Dive Status
 
-### Architecture (100%)
-- [x] System overview, 4 services mapped
-- [x] Database schema (86 tables, 4 schemas), all deep-dives complete
-- [x] Roles and permissions (14 roles from spec vs 11 from DB, reconciled)
-- [x] Frontend module structure, cross-module patterns
-- [x] API surface: 233 endpoints cataloged
-- [x] Security patterns, token model, auth mechanisms
-- [x] Frontend structural quality analysis
-- [x] Backend + frontend test suites analyzed
-- [x] WebSocket, RabbitMQ, feature toggles
-- [x] Error handling agreement (backend↔frontend)
-- [x] CompanyStaff integration: sync flow, 9 post-processors, 7 bugs
-- [x] Deployment architecture: 7 services, Docker Compose, GitLab CI/CD
-- [x] Role-permission access matrix: 85+ endpoints, 5 security gaps
-- [x] Auth/authorization developer doc: dual JWT+API token
-- [x] InnovationLab banner: frontend-only feature, hardcoded role bypass
+| Module | Status | Vault Note | Key Details |
+|--------|--------|-----------------|-------------|
+| Vacation Service | DONE | [[vacation-service-deep-dive]] | 5 validators, 6 permissions, 10 transitions, 11 exceptions, 3 NPE vulns |
+| Reports Service | DONE | [[ttt-report-service-deep-dive]] | 3 states, 13 endpoints, lock management, 3 events, auto-reject |
+| Day-Off Service | DONE | [[dayoff-service-deep-dive]] | 4 conflict paths, calendar integration, 6 entity states |
+| Sick Leave Service | DONE | [[sick-leave-service-deep-dive]] | Dual status model, 8 transitions, attachment handling |
+| Accounting Service | DONE | [[accounting-service-deep-dive]] | Dual period system, payment flow, day correction, 13 design issues |
+| Admin Panel | ENRICHED (S76) | [[admin-panel-deep-dive]] | Projects, employees, calendars, settings, PM Tool sync, 10 design issues |
+| Calendar Service | DONE | [[calendar-service-deep-dive]] | Production calendars, office calendars, day types |
+| Email/Notification | DONE | [[email-notification-deep-dive]] | 12 template types, 2 schedulers, digest system |
+| Cross-Service | ENRICHED (S78) | [[cross-service-integration]] | RabbitMQ (8 exchanges, 11 events), CS sync, WebSocket, +banner +build info |
+| Frontend-Backend | DONE | [[frontend-backend-validation-gaps]] | 25 validation gaps across all modules |
+| Statistics Service | ENRICHED (S72) | [[statistics-service-implementation]] | 3 update paths, norm calculation, 6 design issues |
+| Statistics Eff Bounds | DONE (S72) | [[investigations/statistics-effective-bounds-norm]] | effectiveBounds(), 3 sync paths, budget norm, 10 test gaps |
+| Statistics Caching | NEW (S75) | [[investigations/statistics-caffeine-caching-performance-3337]] | Materialized view pattern, RabbitMQ events, 8 MRs, 3 QA bugs |
+| Frontend Statistics | DONE | [[frontend-statistics-module]] | 12 tech debt items, dual sub-systems |
+| PM Tool Integration | ENRICHED (S76) | [[modules/pm-tool-integration-deep-dive]] | Full Sprint 15 cluster: 7 tickets, 16 MRs, pagination, sales filtering, pmtId, UI restructure |
+| PM Tool Ratelimit | NEW (S73) | [[investigations/pm-tool-ratelimit-implementation]] | Guava RateLimiter, 50 RPM, shared singleton, blocking acquire |
+| Vacation Sprint 15 | DONE (S65) | [[investigations/vacation-sprint-15-technical-details]] | AV logic, next-year blocking, maternity, status job |
+| Vacation AV Multi-Year | NEW (S75) | [[investigations/vacation-av-true-multiYear-balance-3361]] | #3361: currentYear→availablePaidDays fix, daysLimitation reducer, 3 sub-bugs |
+| Vacation Past-Date Val | NEW (S77) | [[investigations/vacation-past-date-validation-3369]] | #3369: isBefore(today) check, dual errors, missing i18n, #3360 balance fix |
+| Contractor Lifecycle | NEW (S77) | [[modules/contractor-lifecycle-architecture]] | Dual sync, no vacation sync, manager hierarchy, CS statuses, Sprint 16 prep |
+| InnovationLab Banner | NEW (S78) | [[investigations/innovationlab-banner-3392]] | #3392: 28 reqs, 3 states, compiled ES module, TTT overrides, role bypass |
+| CI Build Number | NEW (S78) | [[investigations/ci-build-number-3036]] | #3036: actuator-based footer, CI always-rebuild, frontend reverted |
+| Office Sync | DONE (S65) | [[exploration/data-findings/cross-service-office-sync-divergence]] | 62% employee divergence, root cause analysis |
+| Sprint 16 Tickets | DONE (S66) | [[external/tickets/sprint-16-overview]] | 5 tickets, #2876 fix confirmed, #3026 3 unimplemented |
+| CS Office Settings | DONE (S67) | [[investigations/cs-office-settings-unimplemented]] | 3 unused CS fields: firstVacation, burnOff, sickLeave |
+| Maternity Lifecycle | DONE (S67) | [[investigations/maternity-leave-lifecycle]] | Full begin/end event logic, proportional days, V2.1.25 bug |
+| Calendar Migration | DONE (S67) | [[investigations/office-calendar-mapping-2024]] | 11 offices migrated calendars, #2876 context |
+| Planner Module | ENRICHED (S73) | [[modules/planner-assignment-backend]] | 5+4 API endpoints, dual ordering, cell locking, close-by-tag, 5 known bugs |
+| Close-by-Tag Feature | LIVE-TESTED (S74) | [[investigations/planner-close-by-tag-implementation]] | #2724: CRUD API, PATCH 500 bug, XSS concern, deployment gap |
+| Confirmation Notification | NEW (S76) | [[investigations/confirmation-notification-bug-3368]] | #3368: 4 MRs, By Employee missing stats, 3 sub-bugs |
+| Planner Closed Filter | NEW (S76) | [[investigations/planner-copy-table-closed-filter-3386]] | #3386: 2 MRs, closed parameter, copy table fix |
 
-### Vacation Module (100%) — Phase B READY
-- [x] Backend, frontend, DB, requirements, live testing (12 bugs), Figma, business rules reference
-- [x] Form validation rules — Formik custom + 2 backend validators, min days gap
+### Phase B Test Documentation Status — FINAL + SUPPLEMENTS
 
-### Reports/Confirmation Module (100%) — Phase B READY
-- [x] Report CRUD (6 bugs), confirmation flow, period management (4 bugs), statistics, business rules reference
-- [x] Form validation rules — imperative frontend + backend 8 DTOs, effort asymmetry, 62-day search limit
+| Area | Priority | Status | Cases | Suites | Tabs | Output |
+|------|----------|--------|-------|--------|------|--------|
+| Vacation | P1-Absences | ENRICHED (S77) | 173 | 14 | 18 | vacation/vacation.xlsx |
+| Sick Leave | P1-Absences | COMPLETE | 120 | 6 | 10 | sick-leave/sick-leave.xlsx |
+| Day-Off | P1-Absences | COMPLETE | 108 | 6 | 10 | day-off/day-off.xlsx |
+| Reports | P2-Reports | ENRICHED (S76) | 115 | 8 | 12 | reports/reports.xlsx |
+| Accounting | P3-Accounting | COMPLETE | 92 | 6 | 10 | accounting/accounting.xlsx |
+| Admin | P4-Admin | ENRICHED (S76) | 92 | 8 | 12 | admin/admin.xlsx |
+| Statistics | Cross-cutting | ENRICHED (S75) | 138 | 9 | 13 | statistics/statistics.xlsx |
+| Security | Cross-cutting | COMPLETE | 92 | 8 | 12 | security/security.xlsx |
+| Cross-Service | Cross-cutting | ENRICHED (S78) | 52 | 6 | 10 | cross-service/cross-service.xlsx |
+| Planner | Cross-cutting | ENRICHED (S76) | 108 | 11 | 15 | planner/planner.xlsx |
 
-### Sick Leave (100%) — Phase B READY
-- [x] Full lifecycle, dual status, accounting workflow, file upload, business rules reference (8 bugs)
-- [x] Employee vs accounting UI verification, column mapping, dual-status confirmed live
-- [x] Full CRUD lifecycle via UI — create/edit/end/delete tested, 7 fields, 4 validation rules, 3 new bugs
-- [x] Form validation rules — Yup 3 modes (create/edit/close), number required on close only
+**Total: 1090 test cases across 10 XLSX workbooks (82 suites + 10 Test Data tabs = 132 tabs)**
 
-### Calendar/Day-Off (100%) — Phase B READY
-- [x] Full lifecycle, 4 calendar conflict paths, live testing (7+15 bugs), business rules reference
-- [x] Employee-side UI exploration, TransferDaysoffModal date constraints, BUG-DO-11 live confirmation
-- [x] Form validation rules — imperative frontend + custom backend validators, UI vs API weekend gap
+### Session 83 Changes
+- No new activity — monitoring session
+- !5306 auto-merge confirmed merged successfully (conflicts resolved)
+- Builds unchanged across all environments
+- Sprint 16 remains stalled (5 tickets, 0 MRs)
 
-### Accounting (100%) — Phase B READY
-- [x] Period management, payment flow, vacation day correction, production calendars
-- [x] Form validation rules — period (1 field), payment (@Range 0-366, sum constraint), day correction (BigDecimal + comment 255), budget notification (7 fields, 2 class-level validators), statistics search
-
-### Admin Panel (100%) — Phase B READY
-- [x] Projects, Employees, Parameters, Calendars, API, Export, Account
-- [x] Form validation rules — calendar CRUD (name uniqueness), events (duration 0-12), salary office period, tracker config (5 conditional fields), admin general validators (5 patterns)
-
-### Planner (100%)
-- [x] Full spec, close-by-tag permissions (4 iterations analyzed, permission layer verified), ordering, Project Settings
-
-### Email/Notifications (100%)
-- [x] 120 templates, 70 active, cron jobs verified, legacy artifacts identified
-
-### PM Tool Integration (100%)
-- [x] All previous coverage items + ratelimit implementation, ticket cluster analysis
-
-### Tracker Integration (100%)
-- [x] 8 types, GraalVM sandbox, low adoption
-
-### Database Performance (100%)
-- [x] 2.6GB, 7 issues (3 CRITICAL), index analysis
-
-### External Sources (100%)
-- [x] Confluence (25 pages), GitLab (107+ tickets), Google Docs (11 refs), Figma (4), Qase (1116 cases)
-- [x] Sprint 16 preview: 5 tickets (3 relevant to Phase B)
-
-### Cross-Branch Analysis (100%)
-- [x] release/2.1 vs stage, Sprint 15 feature mapping
-- [x] Statistics API cross-env comparison — field set differences
-
-### Statistics Module (100%) — **PHASE B COMPLETE**
-- [x] Backend, frontend, API testing, Confluence requirements
-- [x] Multi-user UI deep exploration — tab visibility matrix, search filters, export, 3 UI bugs
-- [x] Cross-env API comparison — TM vs Stage structural differences documented
-- [x] **TEST PLAN + TEST CASES GENERATED** (111 cases, 7 sheets)
-
-### Phase B Preparation (100%)
-- [x] Test data landscape, Qase granular mapping, test data generation strategies, generation priority order
-- [x] Form validation rules complete for ALL modules
-
-## Session 48 Statistics
-- Vault notes: 159
-- Analysis runs: 133
-- Design issues: 121
-- Exploration findings: 173
-- External refs: 65
-- Module health: 25 modules, avg debt score 5.18
-- Test case tracking: 111 (Statistics module — 7 sheets)
-
-## Phase B Generation Priority Order
-1. **Statistics** — 111 cases generated, 0 Qase existing — **COMPLETE**
-2. **Sick Leave lifecycle** — 0 lifecycle CRUD cases (57 display/notification exist) — NEXT
-3. **Day-Off lifecycle** — 0 lifecycle cases (19 display exist)
-4. **Security/Permissions** — 0 existing coverage
-5. **Accounting supplements** — 127 existing cases, fill gaps
-6. **Vacations supplements** — 200+ existing cases
-7. **Reports supplements** — existing coverage
-8. **Admin supplements** — 115 existing cases
+### Known Gaps (not blocking)
+- #2842 contractor termination lifecycle (not yet implemented — architecture note created S77)
+- #2954 sick leave working days UI (not yet implemented — stalled 5+ months)
+- #3378 tracker script relocation (not yet implemented)
+- #2876 vacation event feed (backlog, analytical task)
+- #3026 CS office settings implementation (backlog, 3 unimplemented fields)
+- #2724 PATCH gateway routing bug (timemachine build 290209 — no new build available)
+- !5114 stale MR — should be closed as duplicate of !5116 (has merge conflicts)
+- !5284 unnecessary MR — 0 diff, already merged via !5273+!5277
+- Frontend architecture analysis (P3 — useful but not required for test documentation)

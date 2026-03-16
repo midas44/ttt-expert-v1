@@ -10,13 +10,18 @@ expert-system/logs/
 # Vault inner git repo (auto-managed by run-sessions.sh)
 expert-system/vault/.git
 
+# Cloned codebase (populated at runtime, 772MB)
+expert-system/repos/
+
+# Python cache
+__pycache__/
+
 # Secret files
 .claude/context/secrets/
 .claude/context/gitlab-credentials.md
-config/ttt/envs/qa-1.yml
 
 # Playwright MCP logs
 .playwright-mcp/
 
-# Exploration artefacts (screenshots, etc.)
+# Exploration artefacts (screenshots, PDFs, downloads)
 expert-system/artefacts/

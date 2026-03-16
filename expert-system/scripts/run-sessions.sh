@@ -344,15 +344,64 @@ commit_vault() {
     local exit_code="$2"
     local duration="$3"
     local vault_dir="$PROJECT_ROOT/expert-system/vault"
+    local diffstat_file="$LOG_DIR/.last-diffstat"
 
     if [[ -d "$vault_dir/.git" ]] || \
        git -C "$vault_dir" init --quiet 2>/dev/null; then
+        # Capture diffstat before committing
+        git -C "$vault_dir" diff --cached --stat --stat-width=120 > "$diffstat_file" 2>/dev/null || true
         git -C "$vault_dir" add -A 2>/dev/null
+        # Re-capture after add (in case files were untracked)
+        git -C "$vault_dir" diff --cached --stat --stat-width=120 > "$diffstat_file" 2>/dev/null || true
         git -C "$vault_dir" \
             -c user.name="Expert System" -c user.email="expert@local" \
             commit -m "Session $session_num (exit $exit_code, ${duration}s)" \
             --allow-empty 2>/dev/null || true
     fi
+
+    # Update state with vault changes
+    python3 -c "
+import json, os, re
+
+diffstat_file = '$diffstat_file'
+state_file = '$STATE_FILE'
+
+if not os.path.exists(state_file) or not os.path.exists(diffstat_file):
+    exit(0)
+
+with open(state_file) as f:
+    state = json.load(f)
+
+with open(diffstat_file) as f:
+    diffstat = f.read()
+
+if not state['sessions']:
+    exit(0)
+
+# Parse diffstat
+created = []
+changed = []
+for line in diffstat.strip().split('\n'):
+    line = line.strip()
+    if not line or line.startswith('create') or '|' not in line:
+        continue
+    parts = line.split('|')
+    if len(parts) == 2:
+        fname = parts[0].strip()
+        changed.append(fname)
+
+# Count from git output (the commit message in runner.log has 'create mode')
+# Instead parse the diffstat for new vs modified
+vault_changes = {
+    'files_changed': len(changed),
+    'files': changed[:20]  # cap at 20 for dashboard
+}
+
+state['sessions'][-1]['vault_changes'] = vault_changes
+
+with open(state_file, 'w') as f:
+    json.dump(state, f, indent=2)
+" 2>/dev/null || true
 }
 
 # ── Completion notification ──────────────────────────────────────────────────

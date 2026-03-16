@@ -1,12 +1,3 @@
----
-type: meta
-tags:
-  - agenda
-  - planning
-created: '2026-03-12'
-updated: '2026-03-15'
-status: active
----
 # Investigation Agenda
 
 ## Priority Legend
@@ -15,177 +6,41 @@ status: active
 - P2: Medium — within next 5 sessions
 - P3: Low — backlog
 
-## Completed (Sessions 1-48)
+## Completed (Sessions 1-83)
 <details>
-<summary>Sessions 1-9 completed items (click to expand)</summary>
+<summary>Sessions 1-83 completed items (click to expand)</summary>
 
-### Session 1
-- [x] Bootstrap vault, SQLite, QMD, repo clone
-- [x] Map repo structure, create architecture overview and module skeletons
-- [x] Pull Confluence entry page and key requirements
-- [x] Check Qase, explore DB schema, roles, periods, absence model
+### Sessions 1-82
+See session 82 agenda for full history. Summary:
+- 82 sessions of knowledge acquisition and Phase B generation
+- 191 vault notes, 170 analysis runs, 146 design issues, 207 exploration findings
+- Phase B: 1090 test cases generated across 10 modules (all unified format)
+- Complete coverage across all areas + supplementary suites + Test Data tabs
 
-### Session 2
-- [x] Confluence deep-read: Accounting, Confirmation, Planner, Statistics, Vacations
-- [x] DB vacation deep-dive, backend vacation service, calculation formulas, multi-approver, debt
-
-### Session 3
-- [x] GitLab tickets (107 total), full API surface mapping (233 endpoints), UI exploration (12 pages)
-
-### Session 4
-- [x] Frontend vacation module, TTT report service, vacation approval e2e, DB deep-dives, Figma designs
-
-### Session 5
-- [x] Frontend report/planner/approve modules, cross-module patterns, bug verification (#2, #4), maintenance
-
-### Session 6
-- [x] Sick leave (backend, frontend, DB, requirements), day-off (full stack), statistics (full stack)
-
-### Session 7
-- [x] Vacation CRUD API testing (6 bugs), sick leave API testing (blocked), security patterns
-
-### Session 8
-- [x] Report CRUD API testing (6 bugs), confirmation flow, frontend dependency analysis
-
-### Session 9
-- [x] Test suite analysis (backend + frontend), day-off API testing (7 bugs), Figma vs live UI
+### Session 83 (Monitoring)
+- [x] GitLab activity check: no new feature MRs since March 16
+- [x] !5306 auto-merge confirmed MERGED (March 16 05:28 UTC) — conflicts resolved
+- [x] Build versions unchanged: TM 290209 (Mar 11), QA-1 290485 (Mar 13), Vacation 287654 (Feb 10), Stage TTT 289618 (Mar 2)
+- [x] Sprint 16: 5 tickets, all open, 0 new MRs, stalled
 
 </details>
 
-<details>
-<summary>Sessions 10-29 completed items (click to expand)</summary>
+## Phase B — 10 WORKBOOKS, 1090 TOTAL TEST CASES, 132 TABS
 
-### Session 10
-- [x] Maintenance, feature toggles, WebSocket, RabbitMQ, accounting API, admin panel, DB tables, frontend accounting, email triggers, PM Tool sync
+**Total: 1090 test cases across 10 XLSX workbooks (82 test suites + 10 Test Data tabs = 132 tabs)**
 
-### Session 11
-- [x] Statistics API (10 endpoints), planner DnD bugs, sick leave accounting, CompanyStaff integration, Google Docs, Confluence statistics
+## Active Items
 
-### Session 12
-- [x] Confirmation flow live testing, day-off rescheduling warning bug, day-off data patterns
+### P2 — Medium Priority
+- [ ] Monitor #2724 for PATCH gateway routing fix — timemachine still on build 290209
+- [ ] Verify close-by-tag frontend deployment on timemachine after next build
+- [ ] Recommend closing !5114 as stale/duplicate of !5116 (has merge conflicts)
+- [ ] Recommend closing !5284 as unnecessary (0 diff — already merged via !5273+!5277)
 
-### Session 13
-- [x] Period advance/revert (4 bugs), day-off calendar conflict code analysis, employee reports row expansion
-
-### Session 14
-- [x] Payment flow (6 bugs), Figma tooltip verification, Google Docs testing docs
-
-### Session 15
-- [x] Email template mapping, day-off conflict live triggering, auto-reject, cron jobs, file upload, maintenance
-
-### Session 16
-- [x] Confluence automation plans, Google Docs (inaccessible), notification page, production calendars
-
-### Session 17
-- [x] Reject with comment e2e, legacy vs new email templates, vacation day correction
-
-### Session 18
-- [x] Admin Projects deep exploration, remaining Confluence pages, Phase B readiness assessment
-
-### Session 19
-- [x] Cross-branch comparison (193 commits), Admin Employees deep exploration, sick leave number validation
-
-### Session 20
-- [x] Maintenance (vault audit, SQLite cleanup), tracker integration deep dive, RabbitMQ statistic sync
-
-### Session 21
-- [x] Database performance analysis (7 issues), deployment architecture, budget/norm tooltip verification
-
-### Session 22
-- [x] Role-permission access matrix (5 security gaps), vacation business rules reference
-
-### Session 23
-- [x] Reports/confirmation business rules reference, sick leave/day-off business rules reference
-
-### Session 24
-- [x] New code (#2724 permissions, auth doc), PM Tool stage comparison, Sprint 15 tickets, Qase dedup strategy
-
-### Session 25
-- [x] Maintenance: index consolidation, SQLite cleanup (3 refs + severity normalization), coverage assessment
-
-### Session 26
-- [x] Sprint 15 ticket scan (60 tickets, 8 new/updated investigated), #3400 CSV export gap, #3392 InnovationLab banner, PM Tool cluster
-
-### Session 27
-- [x] #2724 planner close-by-tag evolution (4 iterations), #3401 PM Tool ratelimit
-
-### Session 28
-- [x] Test data landscape (timemachine DB), Qase granular coverage (258 suites, corrected Accounting 0→127)
-
-### Session 29
-- [x] Statistics UI deep exploration (tab matrix, filters, exports, 3 bugs), sick leave UI verification
-
-</details>
-
-<details>
-<summary>Sessions 30-48 completed items (click to expand)</summary>
-
-### Session 30
-- [x] Maintenance §9.4: Vault audit (154 notes, all indexed), SQLite cleanup (severity normalization, finding_type 37→13)
-
-### Session 31
-- [x] Sick leave CRUD lifecycle via Playwright (7 fields, 4 validation rules, 3 bugs)
-- [x] Statistics cross-env comparison (TM vs Stage: 15 vs 17 fields, name format diff, export 404)
-
-### Session 32
-- [x] Day-off employee view via Playwright (QA-1), TransferDaysoffModal date constraints, BUG-DO-11 live confirmation
-
-### Session 33
-- [x] Form validation rules: vacation (Formik + 2 backend validators), reports (imperative + 8 DTOs), sick leave (Yup 3 modes), day-off (imperative + custom validators)
-
-### Session 34
-- [x] Fixed session 33 artifacts (4 files renamed .md), accounting form validation rules, admin/calendar form validation rules
-
-### Session 35
-- [x] Maintenance §9.4: 4 orphan files deleted, SQLite normalized (12 records), 15 wikilink path mismatches fixed
-- [x] Monitoring: No new commits (7th session), no Sprint 15 updates (7th session)
-
-### Sessions 36-47
-- [x] Monitoring only (8th-19th consecutive no-change sessions)
-- [x] Sprint 16 forward intelligence: 5 tickets (3 relevant)
-- [x] Session 40: Maintenance §9.4 — 43 broken wikilinks fixed, 3 monitoring records compressed
-- [x] Session 42: Corrected GitLab project ID from 622 to 1288
-- [x] Session 45: Maintenance §9.4 — compressed sessions 41-44 monitoring (4→1), vault audit (159 notes, 0 issues)
-
-### Session 48 (Phase B begins)
-- [x] Phase B transition: config updated, generation mode active
-- [x] Statistics module: test-plan-statistics.xlsx (3 sheets) + test-cases-statistics.xlsx (7 sheets, 111 cases)
-- [x] All 111 test cases tracked in test_case_tracking SQLite table
-
-</details>
-
-## Active Items — Phase B Generation
-
-### P1: Sick Leave Lifecycle (Next Session)
-- [ ] Read sick leave business rules reference, backend/frontend notes, exploration findings
-- [ ] Generate test-plan-sick-leave.xlsx (3 sheets)
-- [ ] Generate test-cases-sick-leave.xlsx (lifecycle CRUD, dual status, accounting, files, notifications, validation, permissions)
-- [ ] Track cases in SQLite, update vault
-
-### P1: Day-Off Lifecycle (Sessions 50-51)
-- [ ] Generate test-plan-day-off.xlsx
-- [ ] Generate test-cases-day-off.xlsx (request lifecycle, 4 calendar conflict paths, ledger mechanics, approval)
-
-### P2: Security/Permissions (Sessions 52-53)
-- [ ] Generate cross-cutting security test plan + cases (permission matrix, auth, API token gaps)
-
-### P2: Accounting Supplements (Sessions 53-54)
-- [ ] Generate supplement test cases for gaps not in Qase (period edge cases, payment errors, notification triggers)
-
-### P3: Vacations Supplements
-- [ ] API/edge/business rule cases complementing 200+ existing Qase cases
-
-### P3: Reports Supplements
-- [ ] Confirmation edge cases, period advance/revert, auto-reject
-
-### P3: Admin Supplements
-- [ ] PM Tool sync, close-by-tag permissions, tracker integration
-
-### Known Gaps (not blocking)
-- [ ] #3400 individual norm export — "Production Ready" ticket but no code in codebase
-- [ ] Planner spec (Google Doc — 401, need access)
-
-### Sprint 16 Awareness (for Phase B context)
-- [ ] #2842 Contractor termination — include in sick leave/vacation lifecycle edge cases
-- [ ] #2954 Sick leave working days column — include in sick leave UI test cases
-- [ ] #2876 Vacation event feed + calendar change bugs — include in vacation supplement tests
+### P3 — Backlog (not blocking, depend on future implementation or low priority)
+- [ ] #2842 — Contractor termination: open, stalled 2+ months, assigned to Irina M. Architecture note created (S77).
+- [ ] #2954 — Sick leave working days: open, stalled 5+ months, assigned to Irina M.
+- [ ] #3378 — Tracker script relocation: open, assigned to Aleksandr M., no dev activity.
+- [ ] #2876 — Vacation event feed: open, analytical task, assigned to Irina M.
+- [ ] #3026 — CS office settings implementation: open, 3 unimplemented fields, assigned to Irina M.
+- [ ] Frontend architecture deep analysis (useful for future maintenance, not required for test documentation)

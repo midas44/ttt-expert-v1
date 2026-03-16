@@ -43,6 +43,7 @@ session:
 phase:
   current: "knowledge_acquisition"   # "knowledge_acquisition" or "generation"
   generation_allowed: false          # Set automatically when auto_phase_transition is true
+  coverage_override: 0              # Force coverage to this value (0-100). Set -1 or remove to use computed value.
 
 thresholds:
   knowledge_coverage_target: 0.8
@@ -76,7 +77,9 @@ autonomy:
 
 **Rules:**
 - Read this file BEFORE any other action
-- If `phase.current` is `"knowledge_acquisition"`, focus on knowledge building. When coverage target is met and `auto_phase_transition` is `true`, update config.yaml to transition to Phase B automatically
+- **NEVER modify** these config.yaml fields — they are managed by the human operator: `session.*` (all delay/duration/offhours settings), `autonomy.max_sessions`, `autonomy.model`, `autonomy.effort`. Only modify `phase.*` fields for auto-transition.
+- If `phase.coverage_override` is set to 0-100, use that as current coverage and do NOT auto-transition. Investigate until notes reach genuine depth, then set `coverage_override: -1` before allowing transition.
+- If `phase.current` is `"knowledge_acquisition"`, focus on knowledge building. When coverage target is met, `auto_phase_transition` is `true`, and no coverage_override is active, update config.yaml to transition to Phase B automatically
 - If `phase.current` is `"generation"` and `phase.generation_allowed` is `true`, execute Phase B (test documentation generation with knowledge enrichment)
 - Check `session.delay_minutes` — if previous session briefing timestamp is less than this many minutes ago:
   - **hybrid mode**: notify human and wait for confirmation
@@ -127,12 +130,17 @@ All paths are relative to the project root `/home/v/Dev/ttt-expert-v1/`.
 │   │
 │   ├── scripts/                        # Shell wrappers for analysis tools
 │   │
-│   ├── artefacts/                      # UI screenshots from Playwright exploration (gitignored)
+│   ├── artefacts/                      # Screenshots, PDFs, downloads (gitignored)
 │   │
-│   └── output/                         # Generated XLSX test documentation
-│       ├── vacation/                   #   One subdirectory per functional area
-│       ├── sick-leave/                 #   Each contains a unified workbook
-│       └── .../                        #   (plan + test suites in one file)
+│   └── generators/                     # Python scripts that produce XLSX workbooks
+│       ├── vacation/                   #   Subdirectory per area (mirrors output/)
+│       ├── sick-leave/
+│       └── .../
+│
+├── output/                             # Generated XLSX test documentation (root level)
+│   ├── vacation/vacation.xlsx          #   One subdirectory per functional area
+│   ├── sick-leave/sick-leave.xlsx      #   Each contains a unified workbook
+│   └── .../
 ```
 
 ---
@@ -184,7 +192,7 @@ All paths are relative to the project root `/home/v/Dev/ttt-expert-v1/`.
 │  OUTPUT                                                      │
 │  ┌──────────────────────────────────────────┐               │
 │  │  XLSX — Unified Test Workbooks per Area  │               │
-│  │  expert-system/output/                   │               │
+│  │  output/<area>/<area>.xlsx               │               │
 │  └──────────────────────────────────────────┘               │
 └──────────────────────────────────────────────────────────────┘
 ```
@@ -362,7 +370,9 @@ Access to live application on testing environments via Playwright (UI), Swagger/
   - If `true`: mutations are permitted on testing environments; log each mutation action and its rationale to `exploration_findings` before executing
 
 ### Playwright — UI Exploration
-Use the **`playwright-vpn`** MCP server (tools prefixed `mcp__playwright-vpn__`) for all TTT environments. The built-in Playwright plugin cannot reach VPN hosts due to proxy inheritance. Load tools via `ToolSearch: select:mcp__playwright-vpn__browser_navigate,mcp__playwright-vpn__browser_snapshot` before first use. Navigate flows, verify behavior against Figma/Confluence, screenshot evidence, note undocumented behaviors. Write to `vault/exploration/ui-flows/`. Save all screenshots to the `expert-system/artefacts/` directory (e.g. `expert-system/artefacts/page-name.png`).
+Use the **`playwright-vpn`** MCP server (tools prefixed `mcp__playwright-vpn__`) for all TTT environments. The built-in Playwright plugin cannot reach VPN hosts due to proxy inheritance. Load tools via `ToolSearch: select:mcp__playwright-vpn__browser_navigate,mcp__playwright-vpn__browser_snapshot` before first use. Navigate flows, verify behavior against Figma/Confluence, screenshot evidence, note undocumented behaviors. Write to `vault/exploration/ui-flows/`.
+
+**All generated files** (screenshots, PDFs, downloaded attachments, exported data, or any other non-markdown artefacts) must be saved to `expert-system/artefacts/` — never to the project root or other directories.
 
 ### Swagger/API — API Exploration
 Map endpoints to behavior, test responses and error handling. GET freely; ask permission for mutations. Write to `vault/exploration/api-findings/`.
@@ -432,10 +442,15 @@ Business workflows through code AND live app, requirements correlation, undocume
 
 ### Coverage Assessment and Phase Transition
 Update `_KNOWLEDGE_COVERAGE.md` comprehensively, query module_health for gaps.
+
+**Coverage override:** If `phase.coverage_override` is set to 0-100 in config.yaml, use that value as the current coverage instead of computing it. This allows the human to force a coverage reset (e.g., `coverage_override: 0` to restart deep investigation). When the override is present and >= 0, do NOT auto-transition regardless of computed coverage — investigate until the notes genuinely reach the depth described below, then remove the override (set to -1) before allowing transition.
+
 - **hybrid mode**: Present coverage report to human with Phase B readiness recommendation. Human updates config.yaml to enable generation.
-- **full mode** (with `auto_phase_transition: true`): When coverage >= `thresholds.knowledge_coverage_target`, automatically update `config.yaml` to set `phase.current: "generation"` and `phase.generation_allowed: true`. Log the transition decision to `_SESSION_BRIEFING.md`. The next session will begin Phase B.
+- **full mode** (with `auto_phase_transition: true`): When coverage >= `thresholds.knowledge_coverage_target` AND no coverage_override is active (value is -1 or field absent), automatically update `config.yaml` to set `phase.current: "generation"` and `phase.generation_allowed: true`. Log the transition decision to `_SESSION_BRIEFING.md`. The next session will begin Phase B.
 
 **Important:** Coverage assessment must be based on **depth, not breadth**. A module is not "covered" until its vault notes contain concrete testable details — validation rules with code snippets, error paths, permission requirements per endpoint, boundary values, and state transitions. A 200-word overview note does not count toward coverage.
+
+**Do NOT modify session timing parameters** (`delay_minutes`, `delay_minutes_offhours`, `max_duration_minutes`, `max_sessions`) in config.yaml — these are managed by the human operator.
 
 ---
 
@@ -445,13 +460,13 @@ Only when config.yaml has `phase.current: "generation"` and `phase.generation_al
 
 ### XLSX Format
 
-Generate with Python openpyxl. Output to `expert-system/output/<area>/`.
+Generate with Python openpyxl. Output to `output/<area>/`.
 
 Each functional area produces **one unified XLSX workbook** containing both the test plan and all test suites. This enables single-file import into Google Sheets with multi-tab navigation.
 
 **Directory structure:**
 ```
-expert-system/output/
+output/
 ├── vacation/
 │   └── vacation.xlsx
 ├── sick-leave/
@@ -514,8 +529,8 @@ Per functional area (in priority order above):
 2. Identify gaps — if insufficient, investigate deeper first (see Knowledge Updates below)
 3. Check Qase for existing coverage — never duplicate
 4. Define test suites (logical groupings of 10-30 cases)
-5. Generate the unified XLSX workbook with plan tabs + all TS- tabs + hyperlinks
-6. Create output subdirectory (`expert-system/output/<area>/`)
+5. Write the Python generator script to `expert-system/generators/<area>/generate.py`
+6. Run the generator to produce the unified XLSX workbook in `output/<area>/`
 7. Track each case in `test_case_tracking` table
 8. Update vault notes linking outputs to knowledge base
 

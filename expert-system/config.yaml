@@ -1,41 +1,36 @@
 session:
-  delay_minutes: 70              # Working hours delay (3 sessions/window)
-  delay_minutes_offhours: 45     # Off-hours delay (4 sessions/window)
-  offhours_utc: "15:00-03:00"    # Non-working hours range (UTC)
-  max_duration_minutes: 240
-
+  delay_minutes: 30
+  delay_minutes_offhours: 30
+  offhours_utc: 15:00-03:00
+  max_duration_minutes: 120
 phase:
-  current: "knowledge_acquisition"
-  generation_allowed: false
-
+  current: generation
+  generation_allowed: true
+  coverage_override: -1
 thresholds:
   knowledge_coverage_target: 0.8
   note_quality_min_links: 2
-
 repos:
-  local_clone_path: "expert-system/repos/"
-  default_branch: "release/2.1"
-  additional_branches: [stage]
-
+  local_clone_path: expert-system/repos/
+  default_branch: release/2.1
+  additional_branches:
+  - stage
 testing_dev_envs:
   primary:
-    name: "timemachine"
+    name: timemachine
   secondary:
-    name: "qa-1"
-
+    name: qa-1
 testing_prod_envs:
   primary:
-    name: "stage"
-
+    name: stage
 current_sprint: 15
-
 autonomy:
-  mode: "full"                       # "hybrid" (human-attended) or "full" (unattended)
-  max_sessions: 100                  # Stop after N sessions (0 = unlimited)
-  consecutive_failure_limit: 3       # Abort after N consecutive failures
-  auto_phase_transition: true        # Auto-switch to Phase B when coverage target met
-  log_dir: "expert-system/logs"      # Session log directory
-  stop: false                        # Set to true to gracefully stop after current session
-  model: "opus"                      # Model for claude -p
-  effort: "max"                      # Effort level
-  allow_api_mutations: true          # If false, only GET/SELECT in autonomous mode
+  mode: full
+  max_sessions: 200
+  consecutive_failure_limit: 3
+  auto_phase_transition: true
+  log_dir: expert-system/logs
+  stop: true
+  model: opus
+  effort: max
+  allow_api_mutations: true

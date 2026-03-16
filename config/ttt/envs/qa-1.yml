@@ -8,8 +8,8 @@ initialDatabase: "ttt"
 
 dbUsername: "ttt"
 
-dbPassword: CHANGE_ME
+dbPassword: 123456
 
-apiToken: "CHANGE_ME"
+apiToken: "76c45e8c-457a-4a8f-817f-4160d0cc2eaf"
 
 casLogin: false

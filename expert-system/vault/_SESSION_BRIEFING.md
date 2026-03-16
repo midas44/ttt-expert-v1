@@ -1,84 +1,76 @@
----
-type: meta
-tags:
-  - session
-  - briefing
-created: '2026-03-12'
-updated: '2026-03-15'
-status: active
----
 # Session Briefing
 
-## Current Session: 48
-**Timestamp**: 2026-03-15T06:00:00Z
-**Phase**: generation (Phase B — FIRST SESSION)
+## Current Session: 83 (COMPLETED)
+**Timestamp**: 2026-03-16T18:00:00Z
+**Phase**: generation (Phase B) — 10 workbooks, 1090 total cases
 **Mode**: full (unattended)
+**Type**: Monitoring — no new activity
 
-## Session 48 Summary
+## Session 83 Summary
 
-First Phase B (test documentation generation) session. Generated Statistics module test plan and test cases (111 cases).
+### 1. GitLab Activity — No New Changes
 
-### 1. Phase B Transition
+- **!5306** auto-merge (release/2.1 → development-ttt) was **merged successfully** on 2026-03-16 05:28 UTC — conflicts resolved. Pipeline #290633 green.
+- **!5305** (#3396 CI/CD rollback) merged 2026-03-16 — already tracked in S81/S82
+- **No new feature MRs** since March 16
+- **Pipeline #290633** (development-ttt, Mar 16) — latest, success, 42.31% coverage
 
-Config updated by human since session 47: `phase.current: "generation"`, `phase.generation_allowed: true`. Phase B now active.
+### 2. Build Versions — Unchanged
 
-### 2. Statistics Module — Generated
+| Env | TTT Build | Date | Vacation Build | Date |
+|-----|-----------|------|----------------|------|
+| Timemachine | 290209 | Mar 11 | 287654 | Feb 10 |
+| QA-1 | 290485 | Mar 13 | 287654 | Feb 10 |
+| Stage | 289618 | Mar 02 | 287239 | Feb 05 |
 
-**test-plan-statistics.xlsx** (3 sheets):
-- Overview: scope, objectives, approach, test data strategy, environment requirements
-- Feature Matrix: 13 feature areas × 6 test types, 121 total planned cases
-- Risk Assessment: 12 risks identified (2 Critical, 4 High, 4 Medium, 2 Low)
+- No new deployments across any environment
+- #2724 PATCH 500 bug still present on timemachine (same build 290209)
 
-**test-cases-statistics.xlsx** (7 sheets, 111 cases):
-| Sheet | Cases | Priority H/M/L |
-|-------|-------|-----------------|
-| General Statistics UI | 26 | 10/9/7 |
-| Employee Reports UI | 33 | 17/11/5 |
-| Statistics API | 16 | 5/8/3 |
-| Norm Calculation | 10 | 6/3/1 |
-| Access Control | 9 | 5/3/1 |
-| Data & Cache | 9 | 1/4/4 |
-| Export & Norm CSV | 8 | 1/4/3 |
+### 3. Sprint 16 — Still Stalled
 
-Key coverage areas:
-- 13 permission-gated tabs, role-based visibility
-- Employee Reports: search (Latin/Cyrillic/keyboard layout), norm display (personal vs budget), deviation formula, N/A% edge case
-- API: mixed HOURS/MINUTES units across 12+ endpoints, 500-on-missing-params bug, security gaps
-- Norm: personal vs budget, admin vacation handling, partial month, overlapping absences
-- Cache: 3 update paths, race condition, 2-month sync window
-- Export: 10 CSV endpoints, Google Sheets link, #3400 individual norm
+5 tickets, all open, 0 new MRs:
+| # | Title | Assignee | Status |
+|---|-------|----------|--------|
+| #2842 | Contractor termination | Irina M. | Open (stalled 2+ months) |
+| #3378 | Tracker script relocation | Aleksandr M. | Open |
+| #3026 | CS office settings impl | Irina M. | Open |
+| #2954 | Sick leave working days | Irina M. | Open |
+| #2876 | Vacation event feed | Irina M. | Open |
 
-### 3. SQLite Updates
-- 111 rows in test_case_tracking (first entries)
-- 1 analysis_run logged
+### 4. Open MR Cleanup Candidates
 
-### Vault Updates
-- 0 new knowledge notes (Phase B uses existing knowledge)
-- Session briefing and control files updated
+- **!5284** — hotfix 3392 merge to release: still open, unchecked. Should be closed (already merged via !5273+!5277).
+- **!5114** — vacation bug #3360: still open, has merge conflicts. Superseded by !5116 which was merged.
+- Multiple CI/CD test MRs from Quyen Nguyen (!5167, !5168, !5185-!5188, !5231) — draft/test branches, not production code.
 
-## Current State
-- Vault notes: 159
-- Analysis runs: 133
-- Design issues: 121
-- Exploration findings: 173
-- External refs: 65
-- Module health: 25 modules tracked
-- Test case tracking: 111 (Statistics module)
+### 5. No New Test Cases Needed
 
-## Phase B Progress
+No application code changes since S78. All Sprint 15 tickets with code changes covered (1090 cases).
 
-| Module | Priority | Qase Existing | Generated | Status |
-|--------|----------|---------------|-----------|--------|
-| Statistics | #1 | 0 | 111 | DONE |
-| Sick Leave lifecycle | #2 | 0 lifecycle | 0 | Next |
-| Day-Off lifecycle | #3 | 0 lifecycle | 0 | Pending |
-| Security/Permissions | #4 | 0 | 0 | Pending |
-| Accounting supplements | #5 | 127 | 0 | Pending |
-| Vacations supplements | #6 | 200+ | 0 | Pending |
-| Reports supplements | #7 | existing | 0 | Pending |
-| Admin supplements | #8 | 115 | 0 | Pending |
+## Full Workbook Inventory — 10 WORKBOOKS (unchanged S83)
+| Area | Tabs | Suites | Cases | Format |
+|------|------|--------|-------|--------|
+| vacation | 18 | 14 | 173 | unified |
+| sick-leave | 10 | 6 | 120 | unified |
+| day-off | 10 | 6 | 108 | unified |
+| reports | 12 | 8 | 115 | unified |
+| accounting | 10 | 6 | 92 | unified |
+| admin | 12 | 8 | 92 | unified |
+| statistics | 13 | 9 | 138 | unified |
+| security | 12 | 8 | 92 | unified |
+| cross-service | 10 | 6 | 52 | unified |
+| planner | 15 | 11 | 108 | unified |
+| **TOTAL** | **132** | **82** | **1090** | **all unified** |
 
-## Next Session Plan
-1. Generate Sick Leave lifecycle test plan + test cases (priority #2)
-2. Comprehensive sick leave coverage: CRUD lifecycle, dual status model, accounting workflow, file handling, notifications, validation, permissions
-3. 0 lifecycle CRUD cases in Qase despite 57 display/notification cases — full lifecycle generation needed
+## Cumulative Stats
+- 170 analysis runs, 146 design issues, 207 exploration findings
+- 1090 test cases tracked in SQLite (all exported)
+- 191 vault notes, ~904KB total
+- 10 XLSX workbooks (132 tabs), all verified
+- 26 modules in module_health
+
+## Next Session (84) — Recommendations
+- P2: Monitor for new MRs / Sprint 16 activity
+- P2: Monitor timemachine for redeployment — #2724 PATCH bug still present
+- P2: Recommend closing !5114 (stale duplicate) and !5284 (0 diff)
+- P3: Sprint 16 tickets — test cases when implemented
