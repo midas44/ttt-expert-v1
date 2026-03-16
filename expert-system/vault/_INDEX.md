@@ -32,7 +32,7 @@
 - [[modules/day-off-service-implementation]] — Two-table pattern, 9 lifecycle methods, calendar sync
 - [[modules/dayoff-service-deep-dive]] — **[S54]** Code-level: dual entity, 12 endpoints, 2 validators, 3 conflict paths, 9 design issues
 - [[modules/statistics-service-implementation]] — Cache table, 3 update paths, norm calculation
-- [[modules/planner-assignment-backend]] — Assignment generation, ordering (linked-list + position), close-by-tag
+- [[modules/planner-assignment-backend]] — **[S68+S73]** Assignment CRUD, dual ordering, cell locking, close-by-tag (enriched), 5 known bugs, full API detail
 - [[modules/planner-close-tag-permissions]] — Object-level permission system: CREATE/EDIT/DELETE, 4 authorized roles
 - [[modules/accounting-backend]] — Period management, vacation payment, day corrections, notifications
 - [[modules/accounting-service-deep-dive]] — **[S55]** Code-level: 5-check payment, dual periods, corrections, norm recalc, 13 design issues
@@ -41,6 +41,7 @@
 - [[modules/email-service]] — 4 controllers, notifications
 - [[modules/email-notification-deep-dive]] — **[S56]** Code-level: Mustache templates, batch SMTP, async RabbitMQ, 35+ templates, 7 jobs, digest system, 8 design issues
 - [[modules/pm-tool-sync-implementation]] — Feign client, rate limiting, validation cascade bug
+- [[modules/pm-tool-integration-deep-dive]] — **[S65]** Full architecture: sync, rate limiting, frontend UI, 8 test gaps
 - [[modules/companystaff-integration]] — CS sync across 3 services, V2 Feign client, 9 post-processors, 7 bugs
 - [[modules/auto-reject-report-flow]] — Auto-reject: trigger, UI on My Tasks, BO leak, no data on any env
 - [[modules/admin-panel-deep-dive]] — **[S55]** Code-level: ProjectController, EmployeeController (missing @PreAuthorize), PmToolSync, 10 design issues
@@ -98,6 +99,23 @@
 - [[investigations/tracker-integration-deep-dive]] — 8 tracker types, GraalVM sandbox
 - [[investigations/rabbitmq-statistic-report-sync]] — Complete PATH 3, race condition
 - [[investigations/database-performance-analysis]] — 2.6GB DB, 7 issues, 526MB unused indexes
+- [[investigations/vacation-sprint-15-technical-details]] — **[S65]** AV logic, next-year blocking, double accrual, maternity, status job
+- [[investigations/cs-office-settings-unimplemented]] — **[S67]** #3026: 3 CS fields unused
+- [[investigations/maternity-leave-lifecycle]] — **[S67]** Complete event-driven lifecycle
+- [[investigations/office-calendar-mapping-2024]] — **[S67]** 11 offices migrated calendars
+- [[investigations/statistics-effective-bounds-norm]] — **[S72]** effectiveBounds(), 3 sync paths, budget norm, normForDate, 10 test gaps
+- [[investigations/planner-close-by-tag-implementation]] — **[S73+S74]** #2724: CRUD API, 2-path closing, substring matching, permissions, frontend modal, 10+2 design issues, **PATCH 500 bug**, XSS concern, deployment gap (live-tested S74)
+- [[investigations/pm-tool-ratelimit-implementation]] — **[S73]** #3401: Guava RateLimiter, 50 RPM, shared singleton, blocking acquire
+- [[investigations/vacation-av-true-multiYear-balance-3361]] — **[S75]** #3361: AV=true currentYear→availablePaidDays fix, daysLimitation reducer, 3 sub-bugs
+- [[investigations/statistics-caffeine-caching-performance-3337]] — **[S75]** #3337: Materialized view pattern, 8 MRs, RabbitMQ events, event type discrimination, 3 QA bugs
+- [[investigations/confirmation-notification-bug-3368]] — **[S76]** #3368: 4 MRs, By Employee missing stats, norm fallback, approve period fix, officeId resolution
+- [[investigations/planner-copy-table-closed-filter-3386]] — **[S76]** #3386: 2 MRs, closed parameter filter, copy table fix, auto-refresh
+- [[investigations/vacation-past-date-validation-3369]] — **[S77]** #3369: VacationCreateValidator past-date check, boundary, missing i18n, #3360 balance fix
+- [[investigations/innovationlab-banner-3392]] — **[S78]** #3392: InnovationLab banner, 28 reqs, 3 states, compiled ES module, TTT overrides, role bypass, i18n
+- [[investigations/ci-build-number-3036]] — **[S78]** #3036: CI build number in footer, actuator-based, CI always-rebuild, frontend reverted
+
+## Modules (continued)
+- [[modules/contractor-lifecycle-architecture]] — **[S77]** Contractor subsystem: dual sync, no vacation sync, CS statuses, manager hierarchy, Sprint 16 prep
 
 ## Exploration — UI Flows
 - [[exploration/ui-flows/app-navigation]] — Navigation structure, 7 top-level items
@@ -151,6 +169,7 @@
 - [[exploration/data-findings/dayoff-calendar-conflict-live-test]] — Live create-delete paths
 - [[exploration/data-findings/legacy-vs-new-email-templates]] — 50 legacy, 70 active
 - [[exploration/data-findings/test-data-landscape-timemachine]] — Test data strategies
+- [[exploration/data-findings/cross-service-office-sync-divergence]] — **[S65]** CRITICAL: 62% employee office mismatch
 
 ## External — Requirements
 - [[external/requirements/confluence-overview]] — Entry page summary
@@ -181,16 +200,14 @@
 - [[external/existing-tests/qase-overview]] — 1,116 test cases
 - [[external/existing-tests/confluence-automation-plans]] — Two frameworks
 
-## External — Other
-- [[external/EXT-cron-jobs]] — 21 active cron jobs
-- [[external/EXT-tracker-integration]] — Tracker integration spec
-- [[external/designs/figma-sprint-14-15-designs]] — 4 Figma nodes
+## External — Tickets
 - [[external/tickets/sprint-14-15-overview]] — Sprint 14+15 tickets
 - [[external/tickets/pm-tool-integration]] — 14 PM Tool tickets
 - [[external/tickets/sprint-15-update-session-24]] — 4 new tickets
 - [[external/tickets/ticket-3400-statistics-individual-norm-export]] — Statistics CSV export
 - [[external/tickets/ticket-3392-innovationlab-banner]] — InnovationLab banner
 - [[external/tickets/sprint-16-preview]] — Sprint 16 preview
+- [[external/tickets/sprint-16-overview]] — **[S66]** Sprint 16: 5 tickets, #2876 fix confirmed
 
 ## Branches
 - [[branches/cross-branch-release21-vs-stage]] — 193 commits, 8 features
@@ -200,14 +217,14 @@
 - [[debt/vacation-service-debt]] — 4 bugs, 2 security, schema debt
 - [[debt/planner-ordering-debt]] — Dual ordering, 9 issues
 
-## Phase B — Generated Test Documentation (ALL COMPLETE)
-- **Vacation** (S58): `vacation/vacation.xlsx` (11 tabs, 130 cases) — 8 suites
-- **Sick Leave** (S59): `sick-leave/sick-leave.xlsx` (9 tabs, 120 cases) — 6 suites
-- **Day-Off** (S59): `day-off/day-off.xlsx` (9 tabs, 108 cases) — 6 suites
-- **Reports** (S60): `reports/reports.xlsx` (10 tabs, 110 cases) — 7 suites
-- **Accounting** (S61): `accounting/accounting.xlsx` (9 tabs, 92 cases) — 6 suites
-- **Admin** (S62): `admin/admin.xlsx` (9 tabs, 70 cases) — 6 suites
-- **Statistics** (S63 regen): `statistics/statistics.xlsx` (10 tabs, 111 cases) — 7 suites
-- **Security** (S51): `security/security.xlsx` (11 tabs, 92 cases) — 8 suites
-
-**Total: 833 test cases, 60 test suites, 8 unified XLSX workbooks**
+## Phase B — Generated Test Documentation (10 WORKBOOKS, 1090 CASES, 132 TABS)
+- **Vacation** (S58–S77): `vacation/vacation.xlsx` (18 tabs, 173 cases) — 14 suites + Test Data
+- **Sick Leave** (S59–S72): `sick-leave/sick-leave.xlsx` (10 tabs, 120 cases) — 6 suites + Test Data
+- **Day-Off** (S59–S71): `day-off/day-off.xlsx` (10 tabs, 108 cases) — 6 suites + Test Data
+- **Reports** (S60–S76): `reports/reports.xlsx` (12 tabs, 115 cases) — 8 suites + Test Data
+- **Accounting** (S61–S71): `accounting/accounting.xlsx` (10 tabs, 92 cases) — 6 suites + Test Data
+- **Admin** (S62–S76): `admin/admin.xlsx` (12 tabs, 92 cases) — 8 suites + Test Data
+- **Statistics** (S63–S75): `statistics/statistics.xlsx` (13 tabs, 138 cases) — 9 suites + Test Data
+- **Security** (S64–S71): `security/security.xlsx` (12 tabs, 92 cases) — 8 suites + Test Data
+- **Cross-Service** (S66–**S78**): `cross-service/cross-service.xlsx` (**10 tabs, 52 cases**) — **6 suites** + Test Data
+- **Planner** (S68–S76): `planner/planner.xlsx` (15 tabs, 108 cases) — 11 suites + Test Data

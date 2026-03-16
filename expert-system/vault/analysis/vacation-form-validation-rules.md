@@ -6,7 +6,7 @@ tags:
   - phase-b-prep
   - form-rules
 created: '2026-03-14'
-updated: '2026-03-14'
+updated: '2026-03-16'
 status: active
 related:
   - '[[vacation-business-rules-reference]]'
@@ -84,3 +84,39 @@ Custom Formik validation (not Yup schema). Rules:
 4. **Next year Feb 1 cutoff**: Boundary test at Jan 31 vs Feb 1
 5. **Overlap detection**: 3 patterns — start inside, end inside, enclosing existing
 6. **optionalApprovers validation**: Each login checked individually
+
+
+## Backend Validation — Past-Date Check (MR !5116, #3369)
+
+**Added S77.** The `isStartEndDatesCorrect()` method in `VacationCreateValidator` was enhanced with a past-date check:
+
+```java
+if (request.getStartDate().isBefore(today)) {
+    context.buildConstraintViolationWithTemplate(VACATION_START_DATE_IN_PAST)
+        .addPropertyNode(START_DATE_FIELD).addConstraintViolation();
+    result = false;
+}
+```
+
+**Boundary:** `isBefore(today)` — today is accepted, yesterday rejected.
+
+**Non-short-circuiting:** Both past-date and dates-order checks run independently within `isStartEndDatesCorrect()`. Both errors returned simultaneously if both conditions fail.
+
+**Short-circuit after:** If `isStartEndDatesCorrect()` returns false, `isValidVacationDuration()` and `isNextVacationAvailable()` are NOT invoked (guarded by `&&`).
+
+**Update path:** `VacationUpdateValidator.isStartEndDatesCorrect()` delegates to create validator — same check applies.
+
+**Missing translations:** `validation.vacation.start.date.in.past`, `validation.vacation.dates.order`, `validation.vacation.next.year.not.available` have NO frontend i18n entries — displayed as raw key strings.
+
+See [[investigations/vacation-past-date-validation-3369]] for full analysis.
+
+## Backend — Balance Calculation Fix (MR !5116, #3360)
+
+Changed `calculateDaysBeforeAndAfter(employeesIds, year, year - 2)` (3-year window) to `calculateDaysNotAfter(employeesIds, year)` (unbounded):
+
+```sql
+-- Old: SUM WHERE year <= :before AND year >= :after (3-year window)
+-- New: SUM WHERE year <= :year (all historic years)
+```
+
+Affects `VacationAvailablePaidDaysCalculatorImpl.calculate()` line 94 — used for "Expected balance of days by year-end" display. Employees with > 2 years of accruals were missing older balances.

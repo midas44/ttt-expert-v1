@@ -387,6 +387,6 @@ Calculates regular vacation days within the limit period using `FirstWorkingDayC
 - [[ttt-report-service-deep-dive]] — task report CRUD, confirmation flow
 - [[dayoff-service-deep-dive]] — day-off lifecycle, calendar conflict
 - [[sick-leave-service-deep-dive]] — sick leave dual status model
-- [[vacation-days-calculation]] — calculation details
-- [[period-management]] — period architecture overview
-- [[cron-jobs]] — scheduled task inventory
+- [[vacation-day-calculation]] — calculation details
+- [[office-period-model]] — period architecture overview
+- [[EXT-cron-jobs]] — scheduled task inventory

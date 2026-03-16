@@ -14,7 +14,7 @@ status: active
 related:
   - '[[accounting-service-deep-dive]]'
   - '[[vacation-service-deep-dive]]'
-  - '[[production-calendar]]'
+  - '[[production-calendar-management]]'
 branch: release/2.1
 ---
 # Admin Panel Deep Dive
@@ -278,6 +278,6 @@ Files located but architecture is complex — uses `TrackerClient` abstraction w
 - [[dayoff-service-deep-dive]] — day-off calendar conflicts
 - [[sick-leave-service-deep-dive]] — sick leave lifecycle
 - [[ttt-report-service-deep-dive]] — task report CRUD
-- [[pm-tool-sync]] — PM Tool sync overview
-- [[production-calendar]] — calendar architecture
-- [[cron-jobs]] — scheduled task inventory
+- [[pm-tool-sync-implementation]] — PM Tool sync overview
+- [[production-calendar-management]] — calendar architecture
+- [[EXT-cron-jobs]] — scheduled task inventory

@@ -13,9 +13,9 @@ updated: '2026-03-15'
 status: active
 related:
   - '[[vacation-service-deep-dive]]'
-  - '[[day-off-overview]]'
-  - '[[vacation-approval-flow]]'
-  - '[[calendar-management]]'
+  - '[[day-off-service-implementation]]'
+  - '[[vacation-approval-workflow-e2e]]'
+  - '[[calendar-service-deep-dive]]'
 branch: release/2.1
 ---
 # Day-Off Service Deep Dive

@@ -14,9 +14,9 @@ updated: '2026-03-15'
 status: active
 related:
   - '[[vacation-service-deep-dive]]'
-  - '[[sick-leave-overview]]'
-  - '[[accounting-operations]]'
-  - '[[absence-management]]'
+  - '[[sick-leave-service-implementation]]'
+  - '[[accounting-service-deep-dive]]'
+  - '[[vacation-service-deep-dive]]'
 branch: release/2.1
 ---
 # Sick Leave Service Deep Dive
