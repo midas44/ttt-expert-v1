@@ -136,7 +136,14 @@ The expert system is designed to operate in four modes, selectable via `config.y
 
 3. **Documentation Generation** (implemented, completed). Activated after Phase A reached coverage target with sufficient depth. Produces per-functional-area unified XLSX workbooks (test plan + test suites in one file with cross-linked tabs) using Python openpyxl. Each area goes through: focused deep investigation → knowledge sufficiency check → Qase deduplication check → XLSX generation → tracking in SQLite. Output directory: `output/<area>/`. Generator scripts in `expert-system/generators/<area>/`. Designed for single-file import into Google Sheets with multi-tab navigation. Completed: 1,233 test cases across 81 suites in 10 workbooks.
 
-4. **Interactive** (implicit, always available). A human launches Claude Code in the project directory and gives specific tasks in a conversational session. The agent leverages the full knowledge base (vault, SQLite, QMD search) and all MCP integrations to accomplish narrow tasks: answer questions about the application, investigate specific bugs, trace a particular business workflow, generate test cases for a single feature, update documentation after a known change, or run targeted exploratory tests. The governing documents (`CLAUDE+.md`, Mission Directive) and accumulated knowledge provide context; the human provides direction.
+4. **Interactive** (always available). A human launches `claude` in the project directory and gives specific tasks in a conversational session. The agent leverages the full knowledge base (vault, SQLite, QMD search) and all MCP integrations to accomplish narrow tasks: answer questions about the application, investigate specific bugs, trace a particular business workflow, generate test cases for a single feature, update documentation after a known change, or run targeted exploratory tests.
+
+   No configuration needed — `CLAUDE.md` (interactive mode prompt) is loaded automatically and points the agent to the knowledge base, available MCPs, and the search-first workflow. The autonomous prompt (`CLAUDE+.md`) is only used during `./start.sh` runs.
+
+   **How CLAUDE.md switching works:**
+   - At rest: `CLAUDE.md` is a real file (interactive mode prompt)
+   - On `./start.sh`: runner backs up `CLAUDE.md` to `CLAUDE.md.interactive`, symlinks `CLAUDE.md -> CLAUDE+.md`
+   - On runner exit: symlink is removed, backup is restored — interactive mode resumes
 
 ## Current State
 
@@ -175,7 +182,8 @@ Each workbook contains: Plan Overview, Feature Matrix, Risk Assessment, and TS-*
 **What is in the repo:**
 
 ```
-CLAUDE+.md                              # Master system prompt (~630 lines)
+CLAUDE.md                               # Interactive mode prompt (knowledge base pointers, MCP guide)
+CLAUDE+.md                              # Autonomous mode prompt (~630 lines, full protocol)
 start.sh                               # Start runner in tmux session
 stop.sh                                # Graceful stop (sets autonomy.stop: true)
 dashboard.sh                           # Open HTML dashboard in Chromium
@@ -210,7 +218,7 @@ docs/                                   # Setup guides (human-guide, autonomy-gu
 | Path | Contents | Reason |
 |---|---|---|
 | `.mcp.json` | MCP server configuration with connection URIs, API tokens, PATs | Contains secrets (tokens, credentials) |
-| `CLAUDE.md` | Symlink to `CLAUDE+.md`, auto-created by `run-sessions.sh` | Runtime artifact |
+| `CLAUDE.md.interactive` | Temporary backup of `CLAUDE.md` during autonomous runs | Auto-managed by runner |
 | `expert-system/logs/` | Session runner output, state files, runner log | Transient session artifacts |
 | `expert-system/vault/.git` | Inner git repo for vault history, managed by `run-sessions.sh` | Auto-managed, per-session commits |
 | `expert-system/repos/` | Cloned TTT codebase (~772MB) | Populated at runtime, too large for remote |

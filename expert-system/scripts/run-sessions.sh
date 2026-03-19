@@ -47,8 +47,11 @@ die() { log "FATAL: $*" >&2; exit 1; }
 
 setup_claude_md() {
     local target="$PROJECT_ROOT/CLAUDE.md"
+    local backup="$PROJECT_ROOT/CLAUDE.md.interactive"
+    # Back up existing CLAUDE.md (interactive mode version) if it's a real file
     if [[ -e "$target" && ! -L "$target" ]]; then
-        die "CLAUDE.md exists and is not a symlink — refusing to overwrite"
+        mv "$target" "$backup"
+        log "Backed up CLAUDE.md -> CLAUDE.md.interactive"
     fi
     ln -sf "CLAUDE+.md" "$target"
     log "Created CLAUDE.md -> CLAUDE+.md symlink"
@@ -56,10 +59,16 @@ setup_claude_md() {
 
 cleanup_claude_md() {
     local target="$PROJECT_ROOT/CLAUDE.md"
+    local backup="$PROJECT_ROOT/CLAUDE.md.interactive"
     if [[ -L "$target" ]]; then
         rm "$target"
-        # Only log if fd 1 is still open (may be called during exit)
-        log "Removed CLAUDE.md symlink" 2>/dev/null || true
+        # Restore interactive CLAUDE.md if backup exists
+        if [[ -f "$backup" ]]; then
+            mv "$backup" "$target"
+            log "Restored CLAUDE.md from backup" 2>/dev/null || true
+        else
+            log "Removed CLAUDE.md symlink" 2>/dev/null || true
+        fi
     fi
 }
 

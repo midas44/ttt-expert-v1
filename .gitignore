@@ -1,8 +1,8 @@
 # MCP server config (contains tokens)
 .mcp.json
 
-# CLAUDE.md symlink (auto-created by run-sessions.sh)
-CLAUDE.md
+# CLAUDE.md backup during autonomous runs
+CLAUDE.md.interactive
 
 # Runner logs (session output, state, runner log)
 expert-system/logs/

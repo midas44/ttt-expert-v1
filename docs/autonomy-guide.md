@@ -18,7 +18,12 @@ In autonomous mode, a shell script (`expert-system/scripts/run-sessions.sh`) lau
 4. Updates vault notes, SQLite, and coverage tracking
 5. Exits
 
-The master prompt lives in `CLAUDE+.md`. Claude Code only reads `CLAUDE.md` at session start, so the runner creates a `CLAUDE.md -> CLAUDE+.md` symlink before sessions begin and removes it on exit. This keeps the master prompt active during autonomous runs without polluting interactive sessions.
+The master prompt lives in `CLAUDE+.md`. Claude Code only reads `CLAUDE.md` at session start. The project has two versions of `CLAUDE.md`:
+
+- **Interactive mode** (default): `CLAUDE.md` is a lightweight file that points the agent to the knowledge base, MCPs, and search workflow. Used when a human runs `claude` directly.
+- **Autonomous mode**: The runner backs up `CLAUDE.md` to `CLAUDE.md.interactive`, then symlinks `CLAUDE.md -> CLAUDE+.md` (the full autonomous protocol). On exit, the runner removes the symlink and restores the interactive version from backup.
+
+This switching is automatic — no manual action needed.
 
 The script captures exit codes, enforces stop conditions via timeout, and maintains a state file (`runner-state.json`) across sessions. Each session's stdout (JSON) and stderr (diagnostics) are written to separate files. After each session, vault changes are auto-committed to a local git repo for per-session history. Cross-session memory lives entirely in the vault and SQLite — each `claude -p` invocation is stateless.
 
@@ -225,13 +230,13 @@ Preview what would happen without executing any Claude sessions:
 ```
 
 This shows:
-- CLAUDE.md symlink creation (and removal on exit via trap)
+- CLAUDE.md backup and symlink creation (and restore on exit via trap)
 - Preflight check results (including QMD daemon auto-start)
 - Config values being used, including session timeout
 - The exact prompt that would be sent to each session
 - The `claude` command with timeout that would be executed
 
-Review the bootstrap prompt (session 1) carefully. After the dry run exits, verify `CLAUDE.md` was cleaned up: `ls -la CLAUDE.md` should show "No such file".
+Review the bootstrap prompt (session 1) carefully. After the dry run exits, verify `CLAUDE.md` was restored to the interactive version: `ls -la CLAUDE.md` should show a regular file (not a symlink).
 
 ### 3.2 Single Session Test
 
@@ -256,8 +261,8 @@ cat expert-system/logs/runner.log
 # State file updated
 python3 -m json.tool expert-system/logs/runner-state.json
 
-# CLAUDE.md symlink cleaned up
-ls -la CLAUDE.md  # should be gone
+# CLAUDE.md restored to interactive version
+ls -la CLAUDE.md  # should be a regular file, not a symlink
 
 # Vault files were created
 ls expert-system/vault/_SESSION_BRIEFING.md
@@ -551,12 +556,9 @@ FATAL: claude CLI not found
 ```
 Ensure Claude Code is installed and in PATH.
 
-### CLAUDE.md conflict
+### CLAUDE.md handling
 
-```
-FATAL: CLAUDE.md exists and is not a symlink — refusing to overwrite
-```
-A real `CLAUDE.md` file exists at the project root. The runner won't overwrite it. Either rename/delete the file, or if you created it intentionally, convert it to a symlink: `ln -sf "CLAUDE+.md" CLAUDE.md`.
+The runner automatically backs up the interactive `CLAUDE.md` before autonomous runs and restores it on exit. No manual intervention needed. If you see `CLAUDE.md.interactive` in the project root, the runner is currently active or was interrupted — it will be cleaned up on next runner exit or start.
 
 ### Sessions failing immediately
 
@@ -754,4 +756,5 @@ git -C expert-system/vault log --oneline --stat
 | `expert-system/vault/_KNOWLEDGE_COVERAGE.md` | Coverage metrics |
 | `expert-system/vault/.git` | Vault inner git repo (auto-managed, per-session commits) |
 | `expert-system/artefacts/` | UI screenshots and other exploration artefacts (gitignored) |
-| `CLAUDE+.md` | Master prompt (symlinked as `CLAUDE.md` during runner sessions) |
+| `CLAUDE.md` | Interactive mode prompt (knowledge base pointers, MCP guide) |
+| `CLAUDE+.md` | Autonomous mode prompt (full protocol, symlinked as `CLAUDE.md` during runs) |
